@@ -1,5 +1,44 @@
 package item;
 
 public final class ItemInfo {
-    // TODO: ID, 이름, 아이콘, 발동 방식, 지속 방식, 효과 설정을 읽기 전용으로 정의한다.
+
+    private final String id;
+    private final String name;
+    private final String iconId;
+    private final ActivationMode activationMode;
+    private final EffectLifetime effectLifetime;
+
+    public ItemInfo(
+            String id,
+            String name,
+            String iconId,
+            ActivationMode activationMode,
+            EffectLifetime effectLifetime) {
+
+        this.id = id;
+        this.name = name;
+        this.iconId = iconId;
+        this.activationMode = activationMode;
+        this.effectLifetime = effectLifetime;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getIconId() {
+        return iconId;
+    }
+
+    public ActivationMode getActivationMode() {
+        return activationMode;
+    }
+
+    public EffectLifetime getEffectLifetime() {
+        return effectLifetime;
+    }
 }
