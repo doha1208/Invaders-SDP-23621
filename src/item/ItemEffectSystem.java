@@ -1,6 +1,9 @@
 package item;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.TreeMap;
 import item.ItemAPI.*;
 
 /**
@@ -10,7 +13,12 @@ import item.ItemAPI.*;
  * 이벤트 ID/큐는 매니저 소유. 여기서는 적용/종료/방어 결과만 반환한다.
  */
 class ItemEffectSystem {
-    ItemEffectSystem() { /* TODO: 이 파일 내부에 실행 효과 원본 목록/맵을 생성한다. */ }
+    /** 실행 중인 지속 효과 원본. effectId 오름차순으로 순회된다. kind별 최대 1개. */
+    private final TreeMap<Long, RunningEffect> running = new TreeMap<Long, RunningEffect>();
+    /** 한 판 내 재사용하지 않는다. clear 후에도 이어서 증가한다. */
+    private long nextEffectId = 1;
+
+    ItemEffectSystem() { }
 
     /**
      * TODO: 실제 적용 가능성의 읽기 전용 검사. 가능하면 null, 불가하면 실패 사유.
@@ -18,7 +26,12 @@ class ItemEffectSystem {
      * 정상 실패는 EFFECT_ALREADY_ACTIVE 또는 EFFECT_REJECTED만 반환한다.
      * 포트는 필요한 LIFE에서만 접근하며 슬롯·효과·ID·난수·시간을 변경하지 않는다.
      */
-    GrantFailure check(ItemInfo item, LifePort port) { throw pending("check"); }
+    GrantFailure check(ItemInfo item, LifePort port) {
+        ItemAPI.required(item, "item");
+        if (item.effectKind == EffectKind.LIFE)
+            return ItemAPI.required(port, "port").canAddLife() ? null : GrantFailure.EFFECT_REJECTED;
+        return findByKind(item.effectKind) != null ? GrantFailure.EFFECT_ALREADY_ACTIVE : null;
+    }
 
     /**
      * TODO: 동기적으로 실제 적용하고 Applied 반환. 성공 전 예상 가능한 검증을 전부 수행한다.
@@ -29,7 +42,19 @@ class ItemEffectSystem {
      * 거절은 원본 변경/시간 갱신/ID 소비 없음. MANUAL 분류여도 useSlot에서 이 메서드로 발동 가능.
      * 입력/카탈로그/코딩 오류는 정상 거절로 숨기지 않는다. 포트/다른 콜백으로 매니저에 재진입 금지.
      */
-    Applied apply(ItemInfo item, LifePort port) { throw pending("apply"); }
+    Applied apply(ItemInfo item, LifePort port) {
+        ItemAPI.required(item, "item");
+        if (item.effectKind == EffectKind.LIFE) {
+            ItemAPI.required(port, "port");
+            return port.tryAddLife() ? Applied.ok(null) : Applied.failed(GrantFailure.EFFECT_REJECTED);
+        }
+        validateDefinition(item); // 카탈로그 오류는 거절이 아니라 예외로 드러낸다.
+        if (findByKind(item.effectKind) != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
+
+        RunningEffect effect = new RunningEffect(nextEffectId++, item);
+        running.put(effect.effectId, effect); // 원본 등록을 끝낸 뒤 View를 반환한다.
+        return Applied.ok(effect.view());
+    }
 
     /**
      * TODO: 기존 효과의 시간만 delta만큼 감소. <=0이면 제거 후 Ended(EXPIRED) 반환.
@@ -50,10 +75,67 @@ class ItemEffectSystem {
     Modifiers modifiers() { throw pending("modifiers"); }
 
     /** TODO: 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
-    List<EffectView> snapshot() { throw pending("snapshot"); }
+    List<EffectView> snapshot() {
+        List<EffectView> views = new ArrayList<EffectView>(running.size());
+        for (RunningEffect effect : running.values()) views.add(effect.view());
+        return Collections.unmodifiableList(views);
+    }
 
     /** TODO: 실행 효과 전부 제거, 각각 Ended(LEVEL_ENDED) 반환. ID는 보존한다. */
-    List<Ended> clear() { throw pending("clear"); }
+    List<Ended> clear() {
+        List<Ended> ended = new ArrayList<Ended>(running.size());
+        for (RunningEffect effect : running.values())
+            ended.add(new Ended(effect.item.itemId, effect.effectId, EffectEndReason.LEVEL_ENDED));
+        running.clear(); // nextEffectId는 보존한다.
+        return Collections.unmodifiableList(ended);
+    }
+
+    private RunningEffect findByKind(EffectKind kind) {
+        for (RunningEffect effect : running.values()) if (effect.item.effectKind == kind) return effect;
+        return null;
+    }
+
+    /** ItemDefinitions.validate와 같은 kind/duration/수치 조합 규칙. LIFE는 호출하지 않는다. */
+    private static void validateDefinition(ItemInfo item) {
+        switch (item.effectKind) {
+            case SHIELD:
+                expect(item, DurationKind.TIMED, item.durationMillis != null && item.charges != null);
+                break;
+            case FREEZE:
+                expect(item, DurationKind.TIMED, item.durationMillis != null);
+                break;
+            case RAPID_FIRE:
+            case BULLET_SPEED:
+                expect(item, DurationKind.UNTIL_LEVEL_END, item.magnitude != null);
+                break;
+            default:
+                throw new IllegalStateException("unsupported effect kind: " + item.effectKind);
+        }
+    }
+    private static void expect(ItemInfo item, DurationKind duration, boolean valuesPresent) {
+        if (item.durationKind != duration || !valuesPresent)
+            throw new IllegalStateException("invalid effect definition: " + item.itemId);
+    }
+
+    /** 내부 가변 원본. 외부에는 view()의 불변 EffectView만 내보낸다. */
+    private static final class RunningEffect {
+        final long effectId;
+        final ItemInfo item;
+        /** TIMED 잔여 시간. UNTIL_LEVEL_END는 null(시간 만료 없음). advance가 감소시킨다. */
+        long remainingMillis;
+        /** SHIELD 잔여 방어 횟수. 그 외 null. tryBlockHit이 감소시킨다. */
+        Integer remainingCharges;
+
+        RunningEffect(long effectId, ItemInfo item) {
+            this.effectId = effectId; this.item = item;
+            remainingMillis = item.durationKind == DurationKind.TIMED ? item.durationMillis : 0;
+            remainingCharges = item.effectKind == EffectKind.SHIELD ? item.charges : null;
+        }
+        boolean timed() { return item.durationKind == DurationKind.TIMED; }
+        EffectView view() {
+            return new EffectView(effectId, item, timed() ? Long.valueOf(remainingMillis) : null, remainingCharges);
+        }
+    }
 
     static final class Applied {
         final GrantFailure failure;
