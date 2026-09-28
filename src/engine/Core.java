@@ -8,10 +8,14 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import screen.AchievementsScreen;
 import screen.GameScreen;
 import screen.HighScoreScreen;
 import screen.ScoreScreen;
 import screen.Screen;
+import screen.SettingsScreen;
+import screen.ShopScreen;
+import screen.ShipSelectScreen;
 import screen.TitleScreen;
 
 /**
@@ -71,6 +75,8 @@ public final class Core {
 	private static Handler fileHandler;
 	/** Logger handler for printing to console. */
 	private static ConsoleHandler consoleHandler;
+	/** Persistent achievement progress manager. */
+	private static AchievementManager achievementManager;
 
 
 	/**
@@ -172,7 +178,44 @@ public final class Core {
 				returnCode = frame.setScreen(currentScreen);
 				LOGGER.info("Closing high score screen.");
 				break;
+			case 4:
+				// Settings UI
+				currentScreen = new SettingsScreen(width, height, FPS);
+				LOGGER.info("Starting " + WIDTH + "x" + HEIGHT
+						+ " settings screen at " + FPS + " fps.");
+				returnCode = frame.setScreen(currentScreen);
+				LOGGER.info("Closing settings screen.");
+				break;
+			case 5:
+				// Shop.
+				currentScreen = new ShopScreen(width, height, FPS);
+				LOGGER.info("Starting " + WIDTH + "x" + HEIGHT
+						+ " shop screen at " + FPS + " fps.");
+				returnCode = frame.setScreen(currentScreen);
+				LOGGER.info("Closing shop screen.");
+				break;
+			case 6:
+				// Achievements.
+				currentScreen = new AchievementsScreen(width, height, FPS);
+				LOGGER.info("Starting " + WIDTH + "x" + HEIGHT
+						+ " achievements screen at " + FPS + " fps.");
+				returnCode = frame.setScreen(currentScreen);
+				LOGGER.info("Closing achievements screen.");
+				break;
+			case 7:
+				// Ship select.
+				currentScreen = new ShipSelectScreen(width, height, FPS);
+				LOGGER.info("Starting " + WIDTH + "x" + HEIGHT
+						+ " ship select screen at " + FPS + " fps.");
+				returnCode = frame.setScreen(currentScreen);
+				LOGGER.info("Closing ship select screen.");
+				break;
 			default:
+				// No screen for this code yet - back to the menu instead of
+				// spinning in this loop forever.
+				LOGGER.warning("Unknown return code " + returnCode
+						+ ", returning to the main menu.");
+				returnCode = 1;
 				break;
 			}
 
@@ -224,6 +267,17 @@ public final class Core {
 	 */
 	public static FileManager getFileManager() {
 		return FileManager.getInstance();
+	}
+
+	/**
+	 * Controls access to the achievement manager.
+	 *
+	 * @return Shared achievement manager.
+	 */
+	public static AchievementManager getAchievementManager() {
+		if (achievementManager == null)
+			achievementManager = new AchievementManager();
+		return achievementManager;
 	}
 
 	/**
