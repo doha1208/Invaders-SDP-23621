@@ -1,6 +1,11 @@
 package item;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import item.ItemAPI.*;
 
 /**
@@ -10,9 +15,32 @@ import item.ItemAPI.*;
  * 미구현 업무 메서드는 명시적으로 예외를 던진다. 빈 카탈로그로 성공한 척하지 않는다.
  */
 class ItemDefinitions {
+    private final Map<String, ItemInfo> itemsById;
+    private final List<ItemInfo> items;
+
     ItemDefinitions() {
-        // TODO: 기본 정의를 등록하고 종류/수치/NEXT_LEVEL 조합을 검증한 뒤 불변으로 확정한다.
-        // find/all은 이후 조회만 수행한다. beginLevel 전 직접 지급에서도 유효한 정의여야 한다.
+        Map<String, ItemInfo> definitions = new LinkedHashMap<String, ItemInfo>();
+
+        ItemInfo shield = new ItemInfo(
+            "shield",
+            "Shield",
+            "Blocks one incoming hit for up to 10 seconds.",
+            "shield",
+            ActivationMode.MANUAL,
+            EffectKind.SHIELD,
+            DurationKind.TIMED,
+            10_000L,
+            1,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(shield.itemId, shield);
+
+        itemsById = Collections.unmodifiableMap(definitions);
+        items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
+
+        // TODO: life, rapid_fire, bullet_speed, freeze 정의를 추가한다.
+        // TODO: 모든 종류/수치/NEXT_LEVEL 조합을 검증한 뒤 불변으로 확정한다.
     }
 
     /**
@@ -21,10 +49,10 @@ class ItemDefinitions {
      * bullet_speed(즉시 1.10배/스테이지), freeze(수동 5초 이동차단).
      * 모두 NOW 지원. rapid_fire/bullet_speed만 NEXT_LEVEL 지원. 각 수치는 기획 합의와 대조한다.
      */
-    ItemInfo find(String itemId) { throw pending("find"); }
+    ItemInfo find(String itemId) { return itemsById.get(itemId); }
 
     /** TODO: 등록 순서의 불변 목록. 상점의 판매 목록이 아니다. find와 같은 정의를 사용한다. */
-    List<ItemInfo> all() { throw pending("all"); }
+    List<ItemInfo> all() { return items; }
 
     /**
      * TODO: 상태 변경 없이 모든 정의/규칙을 검증한다.
