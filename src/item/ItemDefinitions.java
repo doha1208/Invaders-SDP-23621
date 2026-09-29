@@ -36,6 +36,21 @@ class ItemDefinitions {
         );
         definitions.put(shield.itemId, shield);
 
+        ItemInfo rapidFire = new ItemInfo(
+            "rapid_fire",
+            "Rapid Fire",
+            "Increases firing rate by 50% until the level ends.",
+            "rapid_fire",
+            ActivationMode.ON_PICKUP,
+            EffectKind.RAPID_FIRE,
+            DurationKind.UNTIL_LEVEL_END,
+            null,
+            null,
+            1.5,
+            EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
+        );
+        definitions.put(rapidFire.itemId, rapidFire);
+
         ItemInfo freeze = new ItemInfo(
             "freeze",
             "Freeze",
@@ -54,7 +69,7 @@ class ItemDefinitions {
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
 
-        // TODO: life, rapid_fire, bullet_speed 정의를 추가한다.
+        // TODO: life, bullet_speed 정의를 추가한다.
         // TODO: 모든 종류/수치/NEXT_LEVEL 조합을 검증한 뒤 불변으로 확정한다.
     }
 
