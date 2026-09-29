@@ -36,10 +36,25 @@ class ItemDefinitions {
         );
         definitions.put(shield.itemId, shield);
 
+        ItemInfo freeze = new ItemInfo(
+            "freeze",
+            "Freeze",
+            "Stops all enemy movement for 5 seconds.",
+            "freeze",
+            ActivationMode.MANUAL,
+            EffectKind.FREEZE,
+            DurationKind.TIMED,
+            5_000L,
+            null,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(freeze.itemId, freeze);
+
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
 
-        // TODO: life, rapid_fire, bullet_speed, freeze 정의를 추가한다.
+        // TODO: life, rapid_fire, bullet_speed 정의를 추가한다.
         // TODO: 모든 종류/수치/NEXT_LEVEL 조합을 검증한 뒤 불변으로 확정한다.
     }
 
