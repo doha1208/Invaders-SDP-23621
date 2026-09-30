@@ -2,6 +2,7 @@ package item;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
 import item.ItemAPI.*;
@@ -57,11 +58,26 @@ class ItemEffectSystem {
     }
 
     /**
-     * TODO: 기존 효과의 시간만 delta만큼 감소. <=0이면 제거 후 Ended(EXPIRED) 반환.
+     * 기존 효과의 시간만 delta만큼 감소. 만료되면 제거 후 Ended(EXPIRED) 반환.
      * 스테이지 지속 효과는 시간으로 만료시키지 않는다. id순서로 종료를 보고한다.
      * 이번 update에서 나중에 새로 적용되는 효과에는 지난 delta를 소급 적용하지 않는다.
      */
-    List<Ended> advance(long delta) { throw pending("advance"); }
+    List<Ended> advance(long delta) {
+        if (delta < 0) throw new IllegalArgumentException("negative delta");
+        List<Ended> ended = new ArrayList<Ended>();
+        Iterator<RunningEffect> iterator = running.values().iterator();
+        while (iterator.hasNext()) {
+            RunningEffect effect = iterator.next();
+            if (!effect.timed()) continue;
+            if (delta >= effect.remainingMillis) {
+                iterator.remove();
+                ended.add(new Ended(effect.item.itemId, effect.effectId, EffectEndReason.EXPIRED));
+            } else {
+                effect.remainingMillis -= delta;
+            }
+        }
+        return Collections.unmodifiableList(ended);
+    }
 
     /**
      * TODO: 유효한 방패가 없으면 null. 있으면 차감 전 불변 View를 보관하고 방어 횟수 감소.
@@ -71,8 +87,28 @@ class ItemEffectSystem {
      */
     Hit tryBlockHit() { throw pending("tryBlockHit"); }
 
-    /** TODO: 항상 1/1/false부터 유효 효과를 합성. 이전 배율에 반복 곱하지 않는다. */
-    Modifiers modifiers() { throw pending("modifiers"); }
+    /** 항상 1/1/false부터 현재 효과를 계산한다. 같은 kind는 최대 하나만 존재한다. */
+    Modifiers modifiers() {
+        double fireRate = 1.0;
+        double bulletSpeed = 1.0;
+        boolean movementBlocked = false;
+        for (RunningEffect effect : running.values()) {
+            switch (effect.item.effectKind) {
+                case RAPID_FIRE:
+                    fireRate = effect.item.magnitude;
+                    break;
+                case BULLET_SPEED:
+                    bulletSpeed = effect.item.magnitude;
+                    break;
+                case FREEZE:
+                    movementBlocked = true;
+                    break;
+                default:
+                    break; // 방패는 방어 횟수로 처리하며 능력치 배율에는 영향을 주지 않는다.
+            }
+        }
+        return new Modifiers(fireRate, bulletSpeed, movementBlocked);
+    }
 
     /** TODO: 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
     List<EffectView> snapshot() {
@@ -121,7 +157,7 @@ class ItemEffectSystem {
     private static final class RunningEffect {
         final long effectId;
         final ItemInfo item;
-        /** TIMED 잔여 시간. UNTIL_LEVEL_END는 null(시간 만료 없음). advance가 감소시킨다. */
+        /** TIMED 잔여 시간. UNTIL_LEVEL_END는 0을 저장하며 시간으로 만료시키지 않는다. */
         long remainingMillis;
         /** SHIELD 잔여 방어 횟수. 그 외 null. tryBlockHit이 감소시킨다. */
         Integer remainingCharges;
