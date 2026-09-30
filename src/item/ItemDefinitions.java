@@ -51,6 +51,21 @@ class ItemDefinitions {
         );
         definitions.put(rapidFire.itemId, rapidFire);
 
+        ItemInfo bulletSpeed = new ItemInfo(
+            "bullet_speed",
+            "Bullet Speed",
+            "Increases projectile speed by 10% until the level ends.",
+            "bullet_speed",
+            ActivationMode.ON_PICKUP,
+            EffectKind.BULLET_SPEED,
+            DurationKind.UNTIL_LEVEL_END,
+            null,
+            null,
+            1.10,
+            EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
+        );
+        definitions.put(bulletSpeed.itemId, bulletSpeed);
+
         ItemInfo freeze = new ItemInfo(
             "freeze",
             "Freeze",
@@ -69,7 +84,7 @@ class ItemDefinitions {
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
 
-        // TODO: life, bullet_speed 정의를 추가한다.
+        // TODO: life 정의를 추가한다.
         // TODO: 모든 종류/수치/NEXT_LEVEL 조합을 검증한 뒤 불변으로 확정한다.
     }
 
