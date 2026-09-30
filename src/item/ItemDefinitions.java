@@ -21,6 +21,21 @@ class ItemDefinitions {
     ItemDefinitions() {
         Map<String, ItemInfo> definitions = new LinkedHashMap<String, ItemInfo>();
 
+        ItemInfo life = new ItemInfo(
+            "life",
+            "Life",
+            "Adds one life, or awards 500 points at the life cap.",
+            "life",
+            ActivationMode.ON_PICKUP,
+            EffectKind.LIFE,
+            DurationKind.INSTANT,
+            null,
+            null,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(life.itemId, life);
+
         ItemInfo shield = new ItemInfo(
             "shield",
             "Shield",
@@ -84,7 +99,6 @@ class ItemDefinitions {
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
 
-        // TODO: life 정의를 추가한다.
         // TODO: 모든 종류/수치/NEXT_LEVEL 조합을 검증한 뒤 불변으로 확정한다.
     }
 
