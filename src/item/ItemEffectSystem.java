@@ -8,7 +8,7 @@ import java.util.TreeMap;
 import item.ItemAPI.*;
 
 /**
- * TODO[EFFECT]: 모든 효과를 한 파일에서 관리한다. 효과별 소스 파일/상속 프레임워크는 만들지 않는다.
+ * 모든 효과를 한 파일에서 관리한다. 효과별 소스 파일/상속 프레임워크는 만들지 않는다.
  * 내부 RunningEffect에 effectId/ItemInfo/잔여 시간/횟수 등을 보관한다. kind별 최대 한 실행 효과.
  * 기본은 빈 상태, clear 이후도 빈 상태. effectId는 한 판 내 재사용하지 않는다.
  * 이벤트 ID/큐는 매니저 소유. 여기서는 적용/종료/방어 결과만 반환한다.
@@ -80,12 +80,19 @@ class ItemEffectSystem {
     }
 
     /**
-     * TODO: 유효한 방패가 없으면 null. 있으면 차감 전 불변 View를 보관하고 방어 횟수 감소.
+     * 유효한 방패가 없으면 null. 있으면 차감 전 불변 View를 보관하고 방어 횟수 감소.
      * 마지막 횟수면 원본 효과도 제거하고 Hit(before,true), 아니면 Hit(before,false).
      * 판정과 소비를 한 호출에서 완료한다. 매니저가 SHIELD_BLOCKED/필요한 종료 사건을 기록한다.
      * advance와 clear에서 이미 제거된 방패를 다시 종료 보고하지 않는다.
      */
-    Hit tryBlockHit() { throw pending("tryBlockHit"); }
+    Hit tryBlockHit() {
+        RunningEffect shield = findByKind(EffectKind.SHIELD);
+        if (shield == null) return null;
+        EffectView before = shield.view();
+        boolean exhausted = --shield.remainingCharges == 0;
+        if (exhausted) running.remove(shield.effectId);
+        return new Hit(before, exhausted);
+    }
 
     /** 항상 1/1/false부터 현재 효과를 계산한다. 같은 kind는 최대 하나만 존재한다. */
     Modifiers modifiers() {
@@ -200,8 +207,5 @@ class ItemEffectSystem {
         Hit(EffectView before, boolean exhausted) {
             this.before = ItemAPI.required(before, "before"); this.exhausted = exhausted;
         }
-    }
-    private UnsupportedOperationException pending(String method) {
-        return new UnsupportedOperationException("[TODO][EFFECT] ItemEffectSystem." + method);
     }
 }
