@@ -10,15 +10,12 @@ import java.util.Random;
 import item.ItemAPI.*;
 
 /**
- * 게임 초기화 코드가 한 판에 하나 생성하는 아이템 시스템 조정자.
- * 게임 루프는 beginLevel/update/endLevel을 호출하고 일반 기능은 ItemAPI로 제공한다.
- * 스테이지 전환 동안 같은 인스턴스를 유지하며 새 판에서는 새 인스턴스를 생성한다.
- * 같은 게임 상태 소유 스레드에서만 호출하며 콜백의 재진입은 금지한다.
+ * 내부 조정자: 이 파일의 조정 로직은 작성되어 있다.
  * 드랍/인벤토리/효과의 원본 상태는 각각 담당 파일이 소유한다.
  * 이 파일은 단계, 현재 연결, 외부 지급 결과, 예약, 사후 이벤트만 소유한다.
- * 남은 협력 클래스의 STUB을 구현하기 전에는 전체 기능을 실행할 수 없다.
+ * 네 협력 파일의 STUB을 구현하기 전에는 전체 기능을 실행할 수 없다.
  */
-public final class ItemManager {
+final class ItemManager {
     private final ItemDefinitions definitions;
     private final ItemDropSystem drops;
     private final ItemInventory inventory;
@@ -32,8 +29,7 @@ public final class ItemManager {
     private LifePort lifePort;
     private PlayerSnapshot player;
 
-    /** 한 판의 보관함 용량과 드랍 난수원을 설정한다. 스테이지는 아직 시작하지 않는다. */
-    public ItemManager(int capacity, Random random) {
+    ItemManager(int capacity, Random random) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity");
         definitions = new ItemDefinitions();
         drops = new ItemDropSystem(definitions, ItemAPI.required(random, "random"));
@@ -111,8 +107,7 @@ public final class ItemManager {
         return effects.check(item, lifePort); // LIFE라면 읽기 전용 canAddLife만 사용해야 한다.
     }
 
-    /** 게임 루프가 스테이지 진입 시 호출한다. 규칙 검증 후 예약 효과를 적용한다. */
-    public void beginLevel(LevelRules newRules, LifePort newPort) {
+    void beginLevel(LevelRules newRules, LifePort newPort) {
         if (active) throw new IllegalStateException("level is already active");
         ItemAPI.required(newRules, "rules"); ItemAPI.required(newPort, "lifePort");
         definitions.validate(newRules); // 전체 규칙/카탈로그를 상태 변경 전에 검증한다.
@@ -145,8 +140,7 @@ public final class ItemManager {
                 null, null, null, null, null, null, spawned.bounds);
     }
 
-    /** 게임 루프가 진행된 게임 시간(ms)과 현재 플레이어 상태를 전달한다. */
-    public void update(long delta, PlayerSnapshot currentPlayer) {
+    void update(long delta, PlayerSnapshot currentPlayer) {
         requireActive(); ItemAPI.required(currentPlayer, "player");
         if (delta < 0) throw new IllegalArgumentException("negative delta");
         // 지난 시간의 만료를 먼저 처리한 뒤 이번 갱신에 얻는 효과를 적용한다.
@@ -211,8 +205,7 @@ public final class ItemManager {
         return result;
     }
 
-    /** 스테이지 연결·드랍·효과를 정리한다. 보관함과 지급 기록은 같은 판 동안 유지한다. */
-    public void endLevel() {
+    void endLevel() {
         if (!active) return;
         List<ItemEffectSystem.Ended> ended = effects.clear();
         drops.clear();
