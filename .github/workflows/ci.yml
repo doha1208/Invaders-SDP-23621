@@ -24,3 +24,6 @@ jobs:
 
       - name: Check resources referenced by code exist
         run: test -f res/graphics && test -f res/scores
+
+      - name: Test item manager
+        run: bash test/run-manager-tests.sh
