@@ -184,3 +184,7 @@ out/
 
 # Local high score file written at runtime (res/scores is the tracked default)
 /scores
+
+# Local verification only; do not commit test sources or test artifacts.
+/test/
+/Run-Item-Test.cmd

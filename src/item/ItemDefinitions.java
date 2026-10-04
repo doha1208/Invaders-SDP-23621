@@ -1,5 +1,13 @@
 package item;
 
+import java.math.BigDecimal;
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Properties;
+import java.util.EnumMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -8,22 +16,42 @@ import java.util.List;
 import java.util.Map;
 import item.ItemAPI.*;
 
-/**
- * 종류의 데이터 사전. 게임 상태/가격/재고/드랍 확률은 저장하지 않는다.
- * 이 클래스는 package-private이다. 다른 팀은 ItemAPI의 조회 함수만 사용한다.
- * ItemInfo 자체를 불변 정의로 재사용한다. 별도 Definition/Repository 파일을 만들지 않는다.
- */
+/** Owns the immutable catalog and a per-run snapshot of external balance settings. */
 class ItemDefinitions {
     private final Map<String, ItemInfo> itemsById;
     private final List<ItemInfo> items;
+    private final Properties balance;
 
     ItemDefinitions() {
+        this(loadBalance());
+    }
+
+    /** Internal test configuration; production reads the external settings once per run. */
+    ItemDefinitions(long shieldDurationMillis, int shieldCharges, double fireRateMultiplier,
+                    double bulletSpeedMultiplier, long freezeDurationMillis) {
+        this(withEffects(shieldDurationMillis, shieldCharges, fireRateMultiplier,
+            bulletSpeedMultiplier, freezeDurationMillis));
+    }
+
+    private ItemDefinitions(Properties settings) {
+        balance = settings;
+        long shieldDurationMillis = integer("shield.durationMillis", Long.MAX_VALUE);
+        int shieldCharges = (int) integer("shield.charges", Integer.MAX_VALUE);
+        double fireRateMultiplier = decimal("rapidFire.multiplier", false, Double.MAX_VALUE);
+        double bulletSpeedMultiplier = decimal("bulletSpeed.multiplier", false, Double.MAX_VALUE);
+        long freezeDurationMillis = integer("freeze.durationMillis", Long.MAX_VALUE);
+        inventoryCapacity();
+        defaultDropRules();
+        decimal("drop.fallSpeed", false, Double.MAX_VALUE);
+        decimal("drop.width", false, Double.MAX_VALUE);
+        decimal("drop.height", false, Double.MAX_VALUE);
+        integer("drop.groundLifetimeMillis", Long.MAX_VALUE);
         Map<String, ItemInfo> definitions = new LinkedHashMap<String, ItemInfo>();
 
         ItemInfo life = new ItemInfo(
             "life",
             "Life",
-            "Adds one life, or awards 500 points at the life cap.",
+            "Adds one life when the game allows it.",
             "life",
             ActivationMode.ON_PICKUP,
             EffectKind.LIFE,
@@ -38,13 +66,14 @@ class ItemDefinitions {
         ItemInfo shield = new ItemInfo(
             "shield",
             "Shield",
-            "Blocks one incoming hit for up to 10 seconds.",
+            "Blocks " + shieldCharges + " incoming hit" + (shieldCharges == 1 ? "" : "s")
+                + " for up to " + seconds(shieldDurationMillis) + " seconds.",
             "shield",
             ActivationMode.MANUAL,
             EffectKind.SHIELD,
             DurationKind.TIMED,
-            10_000L,
-            1,
+            shieldDurationMillis,
+            shieldCharges,
             null,
             EnumSet.of(GrantTiming.NOW)
         );
@@ -53,14 +82,14 @@ class ItemDefinitions {
         ItemInfo rapidFire = new ItemInfo(
             "rapid_fire",
             "Rapid Fire",
-            "Increases firing rate by 50% until the level ends.",
+            "Firing rate: " + number(fireRateMultiplier) + "x until the level ends.",
             "rapid_fire",
             ActivationMode.ON_PICKUP,
             EffectKind.RAPID_FIRE,
             DurationKind.UNTIL_LEVEL_END,
             null,
             null,
-            1.5,
+            fireRateMultiplier,
             EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
         );
         definitions.put(rapidFire.itemId, rapidFire);
@@ -68,14 +97,14 @@ class ItemDefinitions {
         ItemInfo bulletSpeed = new ItemInfo(
             "bullet_speed",
             "Bullet Speed",
-            "Increases projectile speed by 10% until the level ends.",
+            "Projectile speed: " + number(bulletSpeedMultiplier) + "x until the level ends.",
             "bullet_speed",
             ActivationMode.ON_PICKUP,
             EffectKind.BULLET_SPEED,
             DurationKind.UNTIL_LEVEL_END,
             null,
             null,
-            1.10,
+            bulletSpeedMultiplier,
             EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
         );
         definitions.put(bulletSpeed.itemId, bulletSpeed);
@@ -83,12 +112,12 @@ class ItemDefinitions {
         ItemInfo freeze = new ItemInfo(
             "freeze",
             "Freeze",
-            "Stops all enemy movement for 5 seconds.",
+            "Stops all enemy movement for " + seconds(freezeDurationMillis) + " seconds.",
             "freeze",
             ActivationMode.MANUAL,
             EffectKind.FREEZE,
             DurationKind.TIMED,
-            5_000L,
+            freezeDurationMillis,
             null,
             null,
             EnumSet.of(GrantTiming.NOW)
@@ -100,11 +129,107 @@ class ItemDefinitions {
         validateDefinitions();
     }
 
+    int inventoryCapacity() {
+        return (int) integer("inventory.capacity", Integer.MAX_VALUE);
+    }
+
+    LevelRules createLevelRules(String id, double left, double right, double top, double floorY) {
+        LevelRules rules = new LevelRules(id, left, right, top, floorY,
+            decimal("drop.fallSpeed", false, Double.MAX_VALUE),
+            decimal("drop.width", false, Double.MAX_VALUE),
+            decimal("drop.height", false, Double.MAX_VALUE),
+            integer("drop.groundLifetimeMillis", Long.MAX_VALUE), defaultDropRules());
+        validate(rules);
+        return rules;
+    }
+
+    private Map<DropSource, DropRule> defaultDropRules() {
+        Map<String, Double> weights = new LinkedHashMap<String, Double>();
+        weights.put("life", decimal("drop.weight.life", true, Double.MAX_VALUE));
+        weights.put("shield", decimal("drop.weight.shield", true, Double.MAX_VALUE));
+        weights.put("rapid_fire", decimal("drop.weight.rapidFire", true, Double.MAX_VALUE));
+        weights.put("bullet_speed", decimal("drop.weight.bulletSpeed", true, Double.MAX_VALUE));
+        weights.put("freeze", decimal("drop.weight.freeze", true, Double.MAX_VALUE));
+        double regular = decimal("drop.regular.probability", true, 1);
+        double special = decimal("drop.special.probability", true, 1);
+        double total = 0;
+        for (double weight : weights.values()) total += weight;
+        if (!Double.isFinite(total) || ((regular > 0 || special > 0) && total <= 0))
+            throw settingError("drop.weight.*", "finite positive total required when drops are enabled");
+        Map<DropSource, DropRule> rules = new EnumMap<DropSource, DropRule>(DropSource.class);
+        rules.put(DropSource.REGULAR_ENEMY, new DropRule(regular, weights));
+        rules.put(DropSource.SPECIAL_ENEMY, new DropRule(special, weights));
+        return rules;
+    }
+
+    private String value(String key) {
+        String value = balance.getProperty(key);
+        if (value == null || value.trim().isEmpty()) throw settingError(key, "missing value");
+        return value.trim();
+    }
+
+    private long integer(String key, long maximum) {
+        try {
+            long result = Long.parseLong(value(key));
+            if (result <= 0 || result > maximum) throw settingError(key, "positive integer required, maximum " + maximum);
+            return result;
+        } catch (NumberFormatException error) {
+            throw settingError(key, "invalid integer");
+        }
+    }
+
+    private double decimal(String key, boolean allowZero, double maximum) {
+        try {
+            double result = Double.parseDouble(value(key));
+            if (!Double.isFinite(result) || result < 0 || (!allowZero && result == 0) || result > maximum)
+                throw settingError(key, "finite number required in " + (allowZero ? "[0, " : "(0, ") + maximum + "]");
+            return result;
+        } catch (NumberFormatException error) {
+            throw settingError(key, "invalid number");
+        }
+    }
+
+    private IllegalArgumentException settingError(String key, String reason) {
+        return new IllegalArgumentException("item-balance.properties [" + key + "]: " + reason);
+    }
+
+    /** Explicit path wins; otherwise use the working directory or an external classpath resource. */
+    private static Properties loadBalance() {
+        String configured = System.getProperty("invaders.itemBalance");
+        Path path = configured == null ? Path.of("res", "item-balance.properties") : Path.of(configured);
+        if (configured == null && !Files.exists(path)) {
+            java.net.URL resource = ItemDefinitions.class.getResource("/item-balance.properties");
+            if (resource != null && "file".equals(resource.getProtocol())) {
+                try { path = Path.of(resource.toURI()); }
+                catch (java.net.URISyntaxException error) { throw new IllegalStateException("Invalid balance resource path", error); }
+            }
+        }
+        Properties settings = new Properties();
+        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            settings.load(reader);
+        } catch (IOException | IllegalArgumentException error) {
+            throw new IllegalStateException("Cannot read item balance: " + path.toAbsolutePath()
+                + "; supply an external file with -Dinvaders.itemBalance=<path>", error);
+        }
+        return settings;
+    }
+
+    private static Properties withEffects(long shieldMillis, int charges, double fireRate,
+                                           double bulletSpeed, long freezeMillis) {
+        Properties settings = loadBalance();
+        settings.setProperty("shield.durationMillis", Long.toString(shieldMillis));
+        settings.setProperty("shield.charges", Integer.toString(charges));
+        settings.setProperty("rapidFire.multiplier", Double.toString(fireRate));
+        settings.setProperty("bulletSpeed.multiplier", Double.toString(bulletSpeed));
+        settings.setProperty("freeze.durationMillis", Long.toString(freezeMillis));
+        return settings;
+    }
+
     /**
-     * 등록된 ID를 조회한다. 없는 유효 ID만 null이다. 목록은 한 판 동안 불변이다.
-     * 기본 등록: life(즉시 목숨1), shield(수동 10초/1회), rapid_fire(즉시 1.5배/스테이지),
-     * bullet_speed(즉시 1.10배/스테이지), freeze(수동 5초 이동차단).
-     * 모두 NOW 지원. rapid_fire/bullet_speed만 NEXT_LEVEL 지원. 각 수치는 기획 합의와 대조한다.
+     * Looks up an immutable item definition; an unknown valid ID returns null.
+     * Life applies instantly; shield and freeze are manual; speed bonuses last for the level.
+     * All items support NOW. Only rapid fire and bullet speed support NEXT_LEVEL.
+     * Read current balance values from each ItemInfo instead of duplicating them.
      */
     ItemInfo find(String itemId) { return itemsById.get(itemId); }
 
@@ -150,58 +275,71 @@ class ItemDefinitions {
         for (ItemInfo item : items) {
             requireValid(itemsById.get(item.itemId) == item, "definition index mismatch: " + item.itemId);
             requireValid(kinds.add(item.effectKind), "duplicate effect kind: " + item.effectKind);
-            requireValid(item.supportedGrantTimings.contains(GrantTiming.NOW),
-                "NOW timing required: " + item.itemId);
-
-            switch (item.effectKind) {
-                case LIFE:
-                    requireDefinition(item, item.activationMode == ActivationMode.ON_PICKUP
-                        && item.durationKind == DurationKind.INSTANT
-                        && item.durationMillis == null && item.charges == null && item.magnitude == null
-                        && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
-                    break;
-                case SHIELD:
-                    requireDefinition(item, item.activationMode == ActivationMode.MANUAL
-                        && item.durationKind == DurationKind.TIMED
-                        && Long.valueOf(10_000L).equals(item.durationMillis)
-                        && Integer.valueOf(1).equals(item.charges) && item.magnitude == null
-                        && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
-                    break;
-                case RAPID_FIRE:
-                    requireDefinition(item, isLevelMultiplier(item, 1.5));
-                    break;
-                case BULLET_SPEED:
-                    requireDefinition(item, isLevelMultiplier(item, 1.10));
-                    break;
-                case FREEZE:
-                    requireDefinition(item, item.activationMode == ActivationMode.MANUAL
-                        && item.durationKind == DurationKind.TIMED
-                        && Long.valueOf(5_000L).equals(item.durationMillis)
-                        && item.charges == null && item.magnitude == null
-                        && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
-                    break;
-                default:
-                    throw new IllegalArgumentException("unsupported effect kind: " + item.effectKind);
-            }
+            validateDefinition(item);
         }
 
         requireValid(kinds.size() == EffectKind.values().length, "missing effect definition");
     }
 
-    private boolean isLevelMultiplier(ItemInfo item, double magnitude) {
+    /** Shared structural validation for catalog lookup, preflight checks and effect application. */
+    static void validateDefinition(ItemInfo item) {
+        ItemAPI.required(item, "item");
+        requireValid(item.supportedGrantTimings.contains(GrantTiming.NOW),
+            "NOW timing required: " + item.itemId);
+
+        switch (item.effectKind) {
+            case LIFE:
+                requireDefinition(item, item.activationMode == ActivationMode.ON_PICKUP
+                    && item.durationKind == DurationKind.INSTANT
+                    && item.durationMillis == null && item.charges == null && item.magnitude == null
+                    && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
+                break;
+            case SHIELD:
+                requireDefinition(item, item.activationMode == ActivationMode.MANUAL
+                    && item.durationKind == DurationKind.TIMED
+                    && item.durationMillis != null && item.durationMillis > 0
+                    && item.charges != null && item.charges > 0 && item.magnitude == null
+                    && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
+                break;
+            case RAPID_FIRE:
+            case BULLET_SPEED:
+                requireDefinition(item, isLevelMultiplier(item));
+                break;
+            case FREEZE:
+                requireDefinition(item, item.activationMode == ActivationMode.MANUAL
+                    && item.durationKind == DurationKind.TIMED
+                    && item.durationMillis != null && item.durationMillis > 0
+                    && item.charges == null && item.magnitude == null
+                    && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
+                break;
+            default:
+                throw new IllegalArgumentException("unsupported effect kind: " + item.effectKind);
+        }
+    }
+
+    private static boolean isLevelMultiplier(ItemInfo item) {
         return item.activationMode == ActivationMode.ON_PICKUP
             && item.durationKind == DurationKind.UNTIL_LEVEL_END
             && item.durationMillis == null && item.charges == null
-            && Double.valueOf(magnitude).equals(item.magnitude)
+            && item.magnitude != null && Double.isFinite(item.magnitude) && item.magnitude > 0
             && item.supportedGrantTimings.equals(
                 EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL));
     }
 
-    private void requireDefinition(ItemInfo item, boolean condition) {
+    private static String seconds(long millis) {
+        return BigDecimal.valueOf(millis).movePointLeft(3).stripTrailingZeros().toPlainString();
+    }
+
+    private static String number(double value) {
+        ItemAPI.positive(value, "multiplier");
+        return BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
+    }
+
+    private static void requireDefinition(ItemInfo item, boolean condition) {
         requireValid(condition, "invalid definition: " + item.itemId);
     }
 
-    private void requireValid(boolean condition, String message) {
+    private static void requireValid(boolean condition, String message) {
         if (!condition) throw new IllegalArgumentException(message);
     }
 }

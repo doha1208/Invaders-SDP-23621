@@ -11,33 +11,85 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * 외부에서 사용하는 유일한 진입점. 공개 자료형도 이 파일의 static 중첩 타입이다.
- * 요청 전달과 값 객체는 작성되어 있다. 내부 4개 파일이 STUB이므로 아직 게임에 연결하지 않는다.
- * 한 판당 한 인스턴스, 같은 게임 상태 소유 스레드에서만 호출한다. 콜백의 재진입은 금지한다.
+ * The sole public entry point for items, including lifecycle calls and nested data types.
+ * Create one instance per game run and share it across levels and consumers.
+ * Call only from the game-state thread; callbacks must not reenter this API.
+ * The game owns its loop, lives, score and entity movement. This API only manages items.
+ * Read modifiers and snapshots to apply effects and draw items without updating them twice.
+ * <pre>
+ * ItemAPI items = new ItemAPI(capacity, random); // once per run
+ * items.onLevelStarted(rules, lifePort);         // once per level
+ * items.updateItems(deltaGameMillis, player);   // once per gameplay frame
+ * items.useSlot(slotIndex);                    // when an item-use input occurs
+ * items.endLevel();                            // when the game ends the level
+ * </pre>
+ * Lifecycle names: onLevelStarted replaces beginLevel; updateItems replaces update.
  */
 public final class ItemAPI {
     private final ItemManager manager;
 
+    /** Reads external item-balance.properties once and creates a run with its default slot count.
+     * Set -Dinvaders.itemBalance=<path> to select a file; otherwise res/item-balance.properties
+     * or an external classpath resource is used. Restart the run to pick up edits. */
+    public ItemAPI(Random random) {
+        manager = new ItemManager(random);
+    }
+
+    /**
+     * Builds validated default drop rules without starting or changing a level.
+     * Bounds are game-owned pixel coordinates. For per-level overrides, construct LevelRules directly.
+     * Example: items.onLevelStarted(items.createDefaultLevelRules("level-1", 0, 448, 60, 506), lifePort).
+     */
+    public LevelRules createDefaultLevelRules(String levelId, double left, double right,
+                                             double top, double floorY) {
+        return manager.createDefaultLevelRules(levelId, left, right, top, floorY);
+    }
+
+    /** Creates an independent run. Neither a manager nor a game object is required. */
     public ItemAPI(int inventoryCapacity, Random random) {
         if (inventoryCapacity <= 0) throw new IllegalArgumentException("capacity must be positive");
         required(random, "random");
         manager = new ItemManager(inventoryCapacity, random);
     }
 
+    /** Returns immutable metadata, or null for an unknown nonblank ID. */
     public ItemInfo getItemInfo(String itemId) { return manager.getItemInfo(itemId); }
+    /** Returns the immutable catalog; this is not a shop's sale list. */
     public List<ItemInfo> getItemInfos() { return manager.getItemInfos(); }
+    /** Read-only eligibility check, not a reservation or a guarantee of later success. */
     public GrantCheck checkGrant(GrantRequest request) { return manager.checkGrant(request); }
+    /**
+     * Attempts a grant and remembers its first result, including rejection, for this run.
+     * Retrying the same request returns that result. A new attempt needs a new request ID.
+     * NEXT_LEVEL is limited to level-long effects while no level is active.
+     */
     public GrantResult tryGrant(GrantRequest request) { return manager.tryGrant(request); }
-    public void beginLevel(LevelRules rules, LifePort port) { manager.beginLevel(rules, port); }
+    /**
+     * Receives the game's level-start notification and applies pending effects.
+     * Finish the preceding level first. The game-owned port decides the life cap.
+     */
+    public void onLevelStarted(LevelRules rules, LifePort port) { manager.beginLevel(rules, port); }
+    /** Receives one notification per confirmed enemy kill during an active level. */
     public void onEnemyDefeated(DropSource source, double x, double y) {
         manager.onEnemyDefeated(source, x, y);
     }
-    public void update(long deltaGameMillis, PlayerSnapshot player) { manager.update(deltaGameMillis, player); }
+    /**
+     * Advances only item drops and effects once per gameplay frame, excluding paused time.
+     * Pass the current player bounds before useSlot or hit handling. Existing effects expire
+     * before pickups, so a new effect does not lose time from before its acquisition.
+     */
+    public void updateItems(long deltaGameMillis, PlayerSnapshot player) { manager.update(deltaGameMillis, player); }
+    /** Uses a zero-based slot with the latest player snapshot; failure preserves its item. */
     public UseResult useSlot(int slotIndex) { return manager.useSlot(slotIndex); }
+    /** Call only for a valid damaging hit; consumes one shield charge when it returns true. */
     public boolean tryBlockHit() { return manager.tryBlockHit(); }
+    /** Returns current base-relative values. Never multiply them into last frame's result. */
     public Modifiers getModifiers() { return manager.getModifiers(); }
+    /** Returns an immutable snapshot without moving drops or advancing effect timers. */
     public View getView() { return manager.getView(); }
+    /** Removes queued events. One consumer should drain and distribute them to other systems. */
     public List<ItemEvent> drainEvents() { return manager.drainEvents(); }
+    /** Clears drops/effects, keeping inventory, grant receipts and pending grants for this run. */
     public void endLevel() { manager.endLevel(); }
 
     public interface LifePort {

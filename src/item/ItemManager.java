@@ -10,10 +10,10 @@ import java.util.Random;
 import item.ItemAPI.*;
 
 /**
- * 내부 조정자: 이 파일의 조정 로직은 작성되어 있다.
- * 드랍/인벤토리/효과의 원본 상태는 각각 담당 파일이 소유한다.
- * 이 파일은 단계, 현재 연결, 외부 지급 결과, 예약, 사후 이벤트만 소유한다.
- * 네 협력 파일의 STUB을 구현하기 전에는 전체 기능을 실행할 수 없다.
+ * Package-private coordinator owned by one ItemAPI per game run.
+ * Drops, inventory and effects retain their respective state ownership.
+ * This class owns lifecycle, game callbacks, grant receipts, reservations and events.
+ * All external access, including lifecycle notifications, goes through ItemAPI.
  */
 final class ItemManager {
     private final ItemDefinitions definitions;
@@ -29,9 +29,18 @@ final class ItemManager {
     private LifePort lifePort;
     private PlayerSnapshot player;
 
+    ItemManager(Random random) {
+        this(new ItemDefinitions(), null, random);
+    }
+
     ItemManager(int capacity, Random random) {
+        this(new ItemDefinitions(), capacity, random);
+    }
+
+    private ItemManager(ItemDefinitions catalog, Integer requestedCapacity, Random random) {
+        int capacity = requestedCapacity == null ? catalog.inventoryCapacity() : requestedCapacity;
         if (capacity <= 0) throw new IllegalArgumentException("capacity");
-        definitions = new ItemDefinitions();
+        definitions = catalog;
         drops = new ItemDropSystem(definitions, ItemAPI.required(random, "random"));
         inventory = new ItemInventory(capacity);
         effects = new ItemEffectSystem();
@@ -48,6 +57,13 @@ final class ItemManager {
 
     ItemInfo getItemInfo(String id) { return definitions.find(ItemAPI.text(id, "itemId")); }
     List<ItemInfo> getItemInfos() { return ItemAPI.frozen(definitions.all(), false); }
+
+    LevelRules createDefaultLevelRules(String levelId, double left, double right,
+                                       double top, double floorY) {
+        LevelRules defaults = definitions.createLevelRules(levelId, left, right, top, floorY);
+        definitions.validate(defaults);
+        return defaults;
+    }
 
     GrantCheck checkGrant(GrantRequest request) {
         ItemAPI.required(request, "request");

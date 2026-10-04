@@ -22,20 +22,21 @@ class ItemEffectSystem {
     ItemEffectSystem() { }
 
     /**
-     * TODO: 실제 적용 가능성의 읽기 전용 검사. 가능하면 null, 불가하면 실패 사유.
+     * Read-only eligibility check; validates the definition before consulting the life port.
      * LIFE는 port.canAddLife만 호출한다. 나머지는 같은 kind가 실행 중인지 확인한다.
      * 정상 실패는 EFFECT_ALREADY_ACTIVE 또는 EFFECT_REJECTED만 반환한다.
      * 포트는 필요한 LIFE에서만 접근하며 슬롯·효과·ID·난수·시간을 변경하지 않는다.
      */
     GrantFailure check(ItemInfo item, LifePort port) {
         ItemAPI.required(item, "item");
+        validateDefinition(item);
         if (item.effectKind == EffectKind.LIFE)
             return ItemAPI.required(port, "port").canAddLife() ? null : GrantFailure.EFFECT_REJECTED;
         return findByKind(item.effectKind) != null ? GrantFailure.EFFECT_ALREADY_ACTIVE : null;
     }
 
     /**
-     * TODO: 동기적으로 실제 적용하고 Applied 반환. 성공 전 예상 가능한 검증을 전부 수행한다.
+     * Applies an effect synchronously after validating its definition, including LIFE.
      * LIFE: port.tryAddLife() 한 번, true면 ok(null), false면 failed(EFFECT_REJECTED).
      * SHIELD: durationMillis/charges를 보관. RAPID_FIRE/BULLET_SPEED: magnitude와 스테이지 수명.
      * FREEZE: durationMillis 동안 이동 차단 상태. 모두 원래 기체 능력치를 직접 변경하지 않는다.
@@ -45,12 +46,13 @@ class ItemEffectSystem {
      */
     Applied apply(ItemInfo item, LifePort port) {
         ItemAPI.required(item, "item");
+        validateDefinition(item);
         if (item.effectKind == EffectKind.LIFE) {
             ItemAPI.required(port, "port");
             return port.tryAddLife() ? Applied.ok(null) : Applied.failed(GrantFailure.EFFECT_REJECTED);
         }
-        validateDefinition(item); // 카탈로그 오류는 거절이 아니라 예외로 드러낸다.
         if (findByKind(item.effectKind) != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
+        if (nextEffectId <= 0) throw new IllegalStateException("effect IDs exhausted");
 
         RunningEffect effect = new RunningEffect(nextEffectId++, item);
         running.put(effect.effectId, effect); // 원본 등록을 끝낸 뒤 View를 반환한다.
@@ -117,14 +119,14 @@ class ItemEffectSystem {
         return new Modifiers(fireRate, bulletSpeed, movementBlocked);
     }
 
-    /** TODO: 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
+    /** Returns immutable active effects in ID order, excluding instant and ended effects. */
     List<EffectView> snapshot() {
         List<EffectView> views = new ArrayList<EffectView>(running.size());
         for (RunningEffect effect : running.values()) views.add(effect.view());
         return Collections.unmodifiableList(views);
     }
 
-    /** TODO: 실행 효과 전부 제거, 각각 Ended(LEVEL_ENDED) 반환. ID는 보존한다. */
+    /** Clears active effects with LEVEL_ENDED notifications, preserving the ID counter. */
     List<Ended> clear() {
         List<Ended> ended = new ArrayList<Ended>(running.size());
         for (RunningEffect effect : running.values())
@@ -138,26 +140,13 @@ class ItemEffectSystem {
         return null;
     }
 
-    /** ItemDefinitions.validate와 같은 kind/duration/수치 조합 규칙. LIFE는 호출하지 않는다. */
+    /** Use the same structural rules as the catalog before any external or internal mutation. */
     private static void validateDefinition(ItemInfo item) {
-        switch (item.effectKind) {
-            case SHIELD:
-                expect(item, DurationKind.TIMED, item.durationMillis != null && item.charges != null);
-                break;
-            case FREEZE:
-                expect(item, DurationKind.TIMED, item.durationMillis != null);
-                break;
-            case RAPID_FIRE:
-            case BULLET_SPEED:
-                expect(item, DurationKind.UNTIL_LEVEL_END, item.magnitude != null);
-                break;
-            default:
-                throw new IllegalStateException("unsupported effect kind: " + item.effectKind);
+        try {
+            ItemDefinitions.validateDefinition(item);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalStateException("invalid effect definition: " + item.itemId, invalid);
         }
-    }
-    private static void expect(ItemInfo item, DurationKind duration, boolean valuesPresent) {
-        if (item.durationKind != duration || !valuesPresent)
-            throw new IllegalStateException("invalid effect definition: " + item.itemId);
     }
 
     /** 내부 가변 원본. 외부에는 view()의 불변 EffectView만 내보낸다. */
