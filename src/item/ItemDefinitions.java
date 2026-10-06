@@ -126,7 +126,7 @@ class ItemDefinitions {
     /**
      * Validates all definitions/rules without changing state.
      * Checks both DropSource rules, existing IDs, a positive finite weight sum (when p>0), and the configured area.
-     * Also checks each definition's kind/duration/value combination. Duplicate effects of the same kind are REJECTed.
+     * Also checks each definition's kind/duration/value combination. Duplicate effects of the same kind are REJECTed, except SHIELD, which restarts.
      * NEXT_LEVEL is allowed only for RAPID_FIRE/BULLET_SPEED with ON_PICKUP + UNTIL_RUN_END.
      * LIFE is fixed to INSTANT, SHIELD/FREEZE to TIMED, and the two stacking effects to UNTIL_RUN_END.
      * SHIELD requires durationMillis/charges, FREEZE requires durationMillis, the two stacking effects require magnitude/maxStacks.
