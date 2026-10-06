@@ -37,13 +37,14 @@ class ItemEffectSystem {
         RunningEffect existing = findByKind(item.effectKind);
         if (existing == null) return null;
         if (existing.stackable()) return existing.stacks < item.maxStacks ? null : GrantFailure.EFFECT_REJECTED;
+        if (existing.refreshable()) return null;
         return GrantFailure.EFFECT_ALREADY_ACTIVE;
     }
 
     /**
      * Applies synchronously and returns Applied. All foreseeable checks run before success.
      * LIFE: calls port.tryAddLife() once; true → ok(null), false → failed(EFFECT_REJECTED).
-     * SHIELD: keeps durationMillis/charges. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks).
+     * SHIELD: keeps durationMillis/charges; using one while active restarts both. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks).
      * FREEZE: blocks movement for durationMillis. None of them change the ship's base stats directly.
      * A successful lasting effect returns an EffectView with a new effectId, registered before returning.
      * A rejection changes nothing, refreshes no time and consumes no ID. MANUAL items can also be triggered here via useSlot.
@@ -60,6 +61,10 @@ class ItemEffectSystem {
         if (existing != null && existing.stackable()) {
             if (existing.stacks >= item.maxStacks) return Applied.failed(GrantFailure.EFFECT_REJECTED);
             existing.stacks++;
+            return Applied.ok(existing.view());
+        }
+        if (existing != null && existing.refreshable()) {
+            existing.refresh(); // Same effectId, duration and charges back to full.
             return Applied.ok(existing.view());
         }
         if (existing != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
@@ -204,12 +209,18 @@ class ItemEffectSystem {
 
         RunningEffect(long effectId, ItemInfo item) {
             this.effectId = effectId; this.item = item;
+            refresh();
+            stacks = stackable() ? 1 : 0;
+        }
+        /** Sets the remaining time and charges to the item's full values. */
+        void refresh() {
             remainingMillis = item.durationKind == DurationKind.TIMED ? item.durationMillis : 0;
             remainingCharges = item.effectKind == EffectKind.SHIELD ? item.charges : null;
-            stacks = stackable() ? 1 : 0;
         }
         boolean timed() { return item.durationKind == DurationKind.TIMED; }
         boolean stackable() { return item.durationKind == DurationKind.UNTIL_RUN_END; }
+        /** Using another one while active restarts it instead of being rejected (shield). */
+        boolean refreshable() { return item.effectKind == EffectKind.SHIELD; }
         EffectView view() {
             return new EffectView(effectId, item, timed() ? Long.valueOf(remainingMillis) : null,
                 remainingCharges, stackable() ? Integer.valueOf(stacks) : null);
