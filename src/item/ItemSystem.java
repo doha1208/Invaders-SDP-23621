@@ -6,7 +6,9 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.logging.Logger;
 
+import engine.Core;
 import entity.Entity;
 import item.ItemAPI.*;
 
@@ -22,6 +24,8 @@ import item.ItemAPI.*;
 public final class ItemSystem {
     /** Drops exist below the HUD separator line (same height as GameScreen's separator). */
     private static final double PLAY_AREA_TOP = 40;
+    /** How long a notice stays on screen. */
+    private static final long NOTICE_MILLIS = 2000;
 
     private static ItemSystem current;
 
@@ -32,6 +36,11 @@ public final class ItemSystem {
     private GameHooks hooks;
     private int levelNumber;
     private long lastUpdateNanos = -1;
+    /** Shared game logger, like the other systems use. */
+    private final Logger logger = Core.getLogger();
+    /** Short message for the player about the last item action, and when it was set. */
+    private String notice;
+    private long noticeTime;
 
     /** Lets the game screen hand over access to lives/score. The item system does not own lives or score. */
     public interface GameHooks {
@@ -44,6 +53,8 @@ public final class ItemSystem {
         balance = ItemBalance.load();
         manager = new ItemManager(balance.inventoryCapacity, balance, random);
         api = new ItemAPI(manager);
+        manager.setEventListener(this::onEvent);
+        logger.info("Item system started a new run (" + balance.inventoryCapacity + " item slots).");
     }
 
     /** Run instance for the level number. Starts a new run at level 1 or when there is no run. */
@@ -73,6 +84,7 @@ public final class ItemSystem {
             dropRules());
         manager.beginLevel(rules, lifePort);
         lastUpdateNanos = -1;
+        logger.info("Item system started level " + level + ".");
     }
 
     /** Called every frame. Measures elapsed time itself. No pickup/use when shipAvailable=false. */
@@ -100,8 +112,19 @@ public final class ItemSystem {
     /** Called when the player is hit, before taking a life. true means the shield blocked it, so no damage. */
     public boolean tryBlockHit() { return api.tryBlockHit(); }
 
-    /** Uses the item in an inventory slot. */
-    public UseResult useSlot(int slot) { return api.useSlot(slot); }
+    /** Uses the item in an inventory slot. Tells the player why when it cannot be used. */
+    public UseResult useSlot(int slot) {
+        List<ItemInfo> slots = api.getView().slots;
+        ItemInfo item = slot >= 0 && slot < slots.size() ? slots.get(slot) : null;
+        UseResult result = api.useSlot(slot);
+        if (result == UseResult.EMPTY_SLOT) {
+            showNotice("Slot " + (slot + 1) + " is empty");
+        } else if (result == UseResult.EFFECT_ALREADY_ACTIVE && item != null) {
+            showNotice(item.displayName + " is already active");
+            logger.info("Item not used: " + item.displayName + " is already active.");
+        }
+        return result;
+    }
 
     /** Item fire rate bonus: extra shots per second, added on top of the base fire rate. */
     public double fireRateBonus() { return api.getModifiers().fireRateBonus; }
@@ -126,7 +149,14 @@ public final class ItemSystem {
 
     /** Ends the level. Does nothing if no level is active. */
     public void endLevel() {
-        if (isLevelActive()) manager.endLevel();
+        if (!isLevelActive()) return;
+        manager.endLevel();
+        logger.info("Item system ended level " + levelNumber + ".");
+    }
+
+    /** Message about the last item action for the screen, or null when there is nothing recent. */
+    public String getNotice() {
+        return notice != null && System.currentTimeMillis() - noticeTime < NOTICE_MILLIS ? notice : null;
     }
 
     /** Events for sound/effects. Cleared once drained. */
@@ -140,11 +170,78 @@ public final class ItemSystem {
     private final LifePort lifePort = new LifePort() {
         public boolean canAddLife() { return true; }
         public boolean tryAddLife() {
-            if (hooks.getLives() < balance.maxLives) hooks.addLife();
-            else hooks.addScore(balance.lifeCapBonusScore);
+            if (hooks.getLives() < balance.maxLives) {
+                hooks.addLife();
+                logger.info("Life item: +1 life, now " + hooks.getLives() + ".");
+                showNotice("Life +1");
+            } else {
+                hooks.addScore(balance.lifeCapBonusScore);
+                logger.info("Life item at max lives: +" + balance.lifeCapBonusScore + " score.");
+                showNotice("Max lives: +" + balance.lifeCapBonusScore + " score");
+            }
             return true;
         }
     };
+
+    /** Logs every item event and turns the ones the player cares about into a notice. */
+    private void onEvent(ItemEvent event) {
+        ItemInfo item = api.getItemInfo(event.itemId);
+        String name = item == null ? event.itemId : item.displayName;
+        switch (event.type) {
+            case ITEM_SPAWNED:
+                logger.info("Item dropped: " + name + position(event.bounds) + ".");
+                break;
+            case ITEM_COLLECTED:
+                if (event.slotIndex != null) {
+                    int key = event.slotIndex + 1;
+                    logger.info("Item collected: " + name + " stored in slot " + key + ".");
+                    showNotice(name + " stored - press " + key + " to use");
+                } else {
+                    logger.info("Item collected: " + name + ".");
+                }
+                break;
+            case ITEM_USED:
+                logger.info("Item used: " + name + " from slot " + (event.slotIndex + 1) + ".");
+                break;
+            case EFFECT_STARTED: {
+                Integer stacks = stacksOf(event.effectId);
+                String label = name + (stacks != null ? " x" + stacks : "");
+                logger.info("Item effect started: " + label + ".");
+                showNotice(label + "!");
+                break;
+            }
+            case EFFECT_ENDED:
+                logger.info("Item effect ended: " + name + " (" + event.endReason + ").");
+                if (event.endReason == EffectEndReason.EXPIRED) showNotice(name + " ended");
+                break;
+            case SHIELD_BLOCKED:
+                logger.info("Item effect: shield blocked a hit.");
+                showNotice("Shield blocked a hit!");
+                break;
+            case ITEM_EXPIRED:
+                logger.info("Item drop disappeared: " + name + ".");
+                break;
+            default:
+                logger.info("Item event " + event.type + ": " + name + ".");
+                break;
+        }
+    }
+
+    private void showNotice(String text) {
+        notice = text;
+        noticeTime = System.currentTimeMillis();
+    }
+
+    private Integer stacksOf(Long effectId) {
+        if (effectId == null) return null;
+        for (EffectView effect : api.getView().effects)
+            if (effect.effectId == effectId) return effect.stacks;
+        return null;
+    }
+
+    private static String position(Bounds bounds) {
+        return bounds == null ? "" : " at (" + (int) bounds.x + ", " + (int) bounds.y + ")";
+    }
 
     private Map<DropSource, DropRule> dropRules() {
         Map<String, Double> weights = balance.dropWeights;
@@ -157,7 +254,8 @@ public final class ItemSystem {
         return rules;
     }
 
-    private static Color colorOf(EffectKind kind) {
+    /** Color that marks an item kind, shared by the drops and the HUD. */
+    public static Color colorOf(EffectKind kind) {
         switch (kind) {
             case LIFE: return Color.RED;
             case SHIELD: return Color.CYAN;

@@ -23,7 +23,6 @@ import entity.EnemyShip;
 import entity.EnemyShipFormation;
 import entity.Entity;
 import entity.Ship;
-import item.ItemAPI.ItemEvent;
 import item.ItemSystem;
 
 /**
@@ -501,22 +500,11 @@ public class GameScreen extends Screen {
 	}
 
 	/**
-	 * Takes this frame's item events (Team CS) so they don't pile up, and
-	 * logs the ones the player triggers. Sound and effects can hook in here.
+	 * Takes this frame's item events (Team CS) so they don't pile up. The
+	 * item system logs them itself; sound and effects can hook in here.
 	 */
 	private void handleItemEvents() {
-		for (ItemEvent event : this.items.drainEvents()) {
-			switch (event.type) {
-			case ITEM_COLLECTED:
-			case ITEM_USED:
-			case SHIELD_BLOCKED:
-			case EFFECT_ENDED:
-				this.logger.info("Item " + event.type + ": " + event.itemId);
-				break;
-			default:
-				break;
-			}
-		}
+		this.items.drainEvents();
 	}
 
 	/**
