@@ -3,7 +3,6 @@ package item;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -21,25 +20,13 @@ import item.ItemAPI.*;
  * 같은 게임 상태 소유 스레드에서만 호출한다.
  */
 public final class ItemSystem {
-    /** 판 하나의 보관함 칸 수. */
-    public static final int INVENTORY_CAPACITY = 2;
-    /** 목숨 아이템으로 늘릴 수 있는 최대 목숨. 기획 초기값, KFC와 조정 대상. */
-    public static final int MAX_LIVES = 5;
-    /** 목숨이 상한일 때 목숨 아이템 대신 주는 점수. */
-    public static final int LIFE_CAP_BONUS_SCORE = 500;
-    /** 일반 적/특수 적 처치 시 드랍 확률. 기획 초기값, KFC와 조정 대상. */
-    public static final double REGULAR_DROP_PROBABILITY = 0.15;
-    public static final double SPECIAL_DROP_PROBABILITY = 1.0;
-
     /** HUD 구분선 아래부터 드랍이 존재한다 (GameScreen의 구분선 높이와 같다). */
     private static final double PLAY_AREA_TOP = 40;
-    /** 코인과 비슷한 낙하 속도 (2px/프레임 * 60fps). */
-    private static final double FALL_SPEED = 120;
-    private static final double DROP_SIZE = 16;
-    private static final long GROUND_LIFETIME_MILLIS = 5_000L;
 
     private static ItemSystem current;
 
+    /** 이 판의 밸런스 수치 (res/item-balance.properties). 판 시작 시 한 번 읽는다. */
+    private final ItemBalance balance;
     private final ItemManager manager;
     private final ItemAPI api;
     private GameHooks hooks;
@@ -54,7 +41,8 @@ public final class ItemSystem {
     }
 
     private ItemSystem(Random random) {
-        manager = new ItemManager(INVENTORY_CAPACITY, random);
+        balance = ItemBalance.load();
+        manager = new ItemManager(balance.inventoryCapacity, balance, random);
         api = new ItemAPI(manager);
     }
 
@@ -81,7 +69,8 @@ public final class ItemSystem {
         levelNumber = level;
         double floorY = ship.getPositionY() + ship.getHeight();
         LevelRules rules = new LevelRules("level-" + level, 0, screenWidth, PLAY_AREA_TOP, floorY,
-            FALL_SPEED, DROP_SIZE, DROP_SIZE, GROUND_LIFETIME_MILLIS, defaultDropRules());
+            balance.fallSpeed, balance.dropWidth, balance.dropHeight, balance.groundLifetimeMillis,
+            dropRules());
         manager.beginLevel(rules, lifePort);
         lastUpdateNanos = -1;
     }
@@ -155,19 +144,17 @@ public final class ItemSystem {
     private final LifePort lifePort = new LifePort() {
         public boolean canAddLife() { return true; }
         public boolean tryAddLife() {
-            if (hooks.getLives() < MAX_LIVES) hooks.addLife();
-            else hooks.addScore(LIFE_CAP_BONUS_SCORE);
+            if (hooks.getLives() < balance.maxLives) hooks.addLife();
+            else hooks.addScore(balance.lifeCapBonusScore);
             return true;
         }
     };
 
-    private static Map<DropSource, DropRule> defaultDropRules() {
-        Map<String, Double> weights = new LinkedHashMap<String, Double>();
-        for (String id : new String[] {"life", "shield", "rapid_fire", "bullet_speed", "freeze"})
-            weights.put(id, 1.0);
+    private Map<DropSource, DropRule> dropRules() {
+        Map<String, Double> weights = balance.dropWeights;
         Map<DropSource, DropRule> rules = new EnumMap<DropSource, DropRule>(DropSource.class);
-        rules.put(DropSource.REGULAR_ENEMY, new DropRule(REGULAR_DROP_PROBABILITY, weights));
-        rules.put(DropSource.SPECIAL_ENEMY, new DropRule(SPECIAL_DROP_PROBABILITY, weights));
+        rules.put(DropSource.REGULAR_ENEMY, new DropRule(balance.regularDropProbability, weights));
+        rules.put(DropSource.SPECIAL_ENEMY, new DropRule(balance.specialDropProbability, weights));
         return rules;
     }
 

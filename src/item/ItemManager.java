@@ -33,8 +33,13 @@ public final class ItemManager {
 
     /** 한 판의 보관함 용량과 드랍 난수원을 설정한다. 스테이지는 아직 시작하지 않는다. */
     public ItemManager(int capacity, Random random) {
+        this(capacity, ItemBalance.load(), random);
+    }
+
+    /** 이미 읽은 밸런스 수치로 조립한다. ItemSystem이 판 시작 시 한 번 읽은 값을 넘긴다. */
+    ItemManager(int capacity, ItemBalance balance, Random random) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity");
-        definitions = new ItemDefinitions();
+        definitions = new ItemDefinitions(ItemAPI.required(balance, "balance"));
         drops = new ItemDropSystem(definitions, ItemAPI.required(random, "random"));
         inventory = new ItemInventory(capacity);
         effects = new ItemEffectSystem();
