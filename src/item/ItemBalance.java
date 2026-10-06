@@ -24,7 +24,10 @@ final class ItemBalance {
 
     final long shieldDurationMillis;
     final int shieldCharges;
-    final double rapidFireMultiplier, bulletSpeedMultiplier;
+    /** 첫 획득 보너스(연사: 초당 추가 발사, 탄속: 프레임당 추가 픽셀), 최대 중첩, 중첩당 드랍 가중치 배율. */
+    final double rapidFireBonus, bulletSpeedBonus;
+    final int rapidFireMaxStacks, bulletSpeedMaxStacks;
+    final double rapidFireDropDecay, bulletSpeedDropDecay;
     final long freezeDurationMillis;
 
     final int maxLives, lifeCapBonusScore;
@@ -67,8 +70,12 @@ final class ItemBalance {
     ItemBalance(Properties settings) {
         shieldDurationMillis = positiveLong(settings, "shield.durationMillis", 10_000L);
         shieldCharges = positiveInt(settings, "shield.charges", 1);
-        rapidFireMultiplier = positiveDouble(settings, "rapidFire.multiplier", 1.5);
-        bulletSpeedMultiplier = positiveDouble(settings, "bulletSpeed.multiplier", 1.10);
+        rapidFireBonus = positiveDouble(settings, "rapidFire.bonus", 0.5);
+        rapidFireMaxStacks = positiveInt(settings, "rapidFire.maxStacks", 10);
+        rapidFireDropDecay = probability(settings, "rapidFire.dropDecay", 0.7);
+        bulletSpeedBonus = positiveDouble(settings, "bulletSpeed.bonus", 1.0);
+        bulletSpeedMaxStacks = positiveInt(settings, "bulletSpeed.maxStacks", 10);
+        bulletSpeedDropDecay = probability(settings, "bulletSpeed.dropDecay", 0.7);
         freezeDurationMillis = positiveLong(settings, "freeze.durationMillis", 5_000L);
 
         maxLives = positiveInt(settings, "life.maxLives", 5);

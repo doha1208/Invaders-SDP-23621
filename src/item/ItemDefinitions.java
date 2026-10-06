@@ -35,6 +35,7 @@ class ItemDefinitions {
             null,
             null,
             null,
+            null,
             EnumSet.of(GrantTiming.NOW)
         );
         definitions.put(life.itemId, life);
@@ -51,6 +52,7 @@ class ItemDefinitions {
             balance.shieldDurationMillis,
             balance.shieldCharges,
             null,
+            null,
             EnumSet.of(GrantTiming.NOW)
         );
         definitions.put(shield.itemId, shield);
@@ -58,14 +60,16 @@ class ItemDefinitions {
         ItemInfo rapidFire = new ItemInfo(
             "rapid_fire",
             "Rapid Fire",
-            "Multiplies firing rate by " + balance.rapidFireMultiplier + " until the level ends.",
+            "Fires faster for the rest of the run. Stacks up to " + balance.rapidFireMaxStacks
+                + " times with smaller gains each time.",
             "rapid_fire",
             ActivationMode.ON_PICKUP,
             EffectKind.RAPID_FIRE,
-            DurationKind.UNTIL_LEVEL_END,
+            DurationKind.UNTIL_RUN_END,
             null,
             null,
-            balance.rapidFireMultiplier,
+            balance.rapidFireBonus,
+            balance.rapidFireMaxStacks,
             EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
         );
         definitions.put(rapidFire.itemId, rapidFire);
@@ -73,14 +77,16 @@ class ItemDefinitions {
         ItemInfo bulletSpeed = new ItemInfo(
             "bullet_speed",
             "Bullet Speed",
-            "Multiplies projectile speed by " + balance.bulletSpeedMultiplier + " until the level ends.",
+            "Bullets fly faster for the rest of the run. Stacks up to " + balance.bulletSpeedMaxStacks
+                + " times with smaller gains each time.",
             "bullet_speed",
             ActivationMode.ON_PICKUP,
             EffectKind.BULLET_SPEED,
-            DurationKind.UNTIL_LEVEL_END,
+            DurationKind.UNTIL_RUN_END,
             null,
             null,
-            balance.bulletSpeedMultiplier,
+            balance.bulletSpeedBonus,
+            balance.bulletSpeedMaxStacks,
             EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
         );
         definitions.put(bulletSpeed.itemId, bulletSpeed);
@@ -94,6 +100,7 @@ class ItemDefinitions {
             EffectKind.FREEZE,
             DurationKind.TIMED,
             balance.freezeDurationMillis,
+            null,
             null,
             null,
             EnumSet.of(GrantTiming.NOW)
@@ -120,9 +127,9 @@ class ItemDefinitions {
      * 상태 변경 없이 모든 정의/규칙을 검증한다.
      * 두 DropSource 규칙, 존재하는 ID, 양의 유한 가중치 합(p>0일 때), 설정 영역을 검증한다.
      * 정의의 kind/duration/수치 조합도 확인한다. 동일 kind 중복 효과 정책은 REJECT다.
-     * NEXT_LEVEL은 ON_PICKUP + UNTIL_LEVEL_END인 RAPID_FIRE/BULLET_SPEED만 가능하다.
-     * LIFE는 INSTANT, SHIELD/FREEZE는 TIMED, 두 배율 효과는 UNTIL_LEVEL_END로 고정한다.
-     * SHIELD는 durationMillis/charges, FREEZE는 durationMillis, 두 배율은 magnitude가 필수다.
+     * NEXT_LEVEL은 ON_PICKUP + UNTIL_RUN_END인 RAPID_FIRE/BULLET_SPEED만 가능하다.
+     * LIFE는 INSTANT, SHIELD/FREEZE는 TIMED, 두 중첩 효과는 UNTIL_RUN_END로 고정한다.
+     * SHIELD는 durationMillis/charges, FREEZE는 durationMillis, 두 중첩 효과는 magnitude/maxStacks가 필수다.
      * 지원하지 않는 값 조합은 예외. 잘못된 설정을 자동 보정하거나 게임을 시작하지 않는다.
      */
     void validate(LevelRules rules) {
@@ -163,26 +170,27 @@ class ItemDefinitions {
                     requireDefinition(item, item.activationMode == ActivationMode.ON_PICKUP
                         && item.durationKind == DurationKind.INSTANT
                         && item.durationMillis == null && item.charges == null && item.magnitude == null
+                        && item.maxStacks == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
                 case SHIELD:
                     requireDefinition(item, item.activationMode == ActivationMode.MANUAL
                         && item.durationKind == DurationKind.TIMED
                         && item.durationMillis != null
-                        && item.charges != null && item.magnitude == null
+                        && item.charges != null && item.magnitude == null && item.maxStacks == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
                 case RAPID_FIRE:
-                    requireDefinition(item, isLevelMultiplier(item));
+                    requireDefinition(item, isRunStack(item));
                     break;
                 case BULLET_SPEED:
-                    requireDefinition(item, isLevelMultiplier(item));
+                    requireDefinition(item, isRunStack(item));
                     break;
                 case FREEZE:
                     requireDefinition(item, item.activationMode == ActivationMode.MANUAL
                         && item.durationKind == DurationKind.TIMED
                         && item.durationMillis != null
-                        && item.charges == null && item.magnitude == null
+                        && item.charges == null && item.magnitude == null && item.maxStacks == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
                 default:
@@ -193,11 +201,11 @@ class ItemDefinitions {
         requireValid(kinds.size() == EffectKind.values().length, "missing effect definition");
     }
 
-    private boolean isLevelMultiplier(ItemInfo item) {
+    private boolean isRunStack(ItemInfo item) {
         return item.activationMode == ActivationMode.ON_PICKUP
-            && item.durationKind == DurationKind.UNTIL_LEVEL_END
+            && item.durationKind == DurationKind.UNTIL_RUN_END
             && item.durationMillis == null && item.charges == null
-            && item.magnitude != null
+            && item.magnitude != null && item.maxStacks != null
             && item.supportedGrantTimings.equals(
                 EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL));
     }

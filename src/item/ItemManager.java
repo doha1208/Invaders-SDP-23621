@@ -143,7 +143,7 @@ public final class ItemManager {
     void onEnemyDefeated(DropSource source, double x, double y) {
         requireActive(); ItemAPI.required(source, "source");
         ItemAPI.finite(x, "x"); ItemAPI.finite(y, "y");
-        DropView spawned = drops.spawn(source, x, y);
+        DropView spawned = drops.spawn(source, x, y, effects.stacksByItemId());
         if (spawned != null)
             emit(EventType.ITEM_SPAWNED, spawned.item.itemId, spawned.dropId,
                 null, null, null, null, null, null, spawned.bounds);
@@ -215,7 +215,7 @@ public final class ItemManager {
         return result;
     }
 
-    /** 스테이지 연결·드랍·효과를 정리한다. 보관함과 지급 기록은 같은 판 동안 유지한다. */
+    /** 스테이지 연결·드랍·스테이지 효과를 정리한다. 보관함, 지급 기록, 판 단위 중첩 효과는 같은 판 동안 유지한다. */
     public void endLevel() {
         if (!active) return;
         List<ItemEffectSystem.Ended> ended = effects.clear();
@@ -253,7 +253,7 @@ public final class ItemManager {
     private static boolean supportsNextLevel(ItemInfo item) {
         return item.supportedGrantTimings.contains(GrantTiming.NEXT_LEVEL)
             && item.activationMode == ActivationMode.ON_PICKUP
-            && item.durationKind == DurationKind.UNTIL_LEVEL_END
+            && item.durationKind == DurationKind.UNTIL_RUN_END
             && (item.effectKind == EffectKind.RAPID_FIRE || item.effectKind == EffectKind.BULLET_SPEED);
     }
     /** 레벨 진행 중 여부. 게임 연결 창구(ItemSystem)가 중복 시작/종료를 피하는 데 쓴다. */

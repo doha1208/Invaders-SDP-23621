@@ -45,7 +45,8 @@ public final class ItemAPI {
 
     public enum ActivationMode { ON_PICKUP, MANUAL }
     public enum EffectKind { LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE }
-    public enum DurationKind { INSTANT, TIMED, UNTIL_LEVEL_END }
+    /** UNTIL_RUN_END: 한 판 동안 유지되며 여러 번 획득하면 중첩된다(연사·탄속). */
+    public enum DurationKind { INSTANT, TIMED, UNTIL_LEVEL_END, UNTIL_RUN_END }
     public enum DropSource { REGULAR_ENEMY, SPECIAL_ENEMY }
     public enum GrantSource { SHOP, REWARD }
     public enum GrantTiming { NOW, NEXT_LEVEL }
@@ -86,15 +87,19 @@ public final class ItemAPI {
         }
     }
 
+    /**
+     * 아이템이 더해 주는 값. 게임은 기본값을 바꾸지 않고 (기본값)+(아이템 보너스)로 계산한다.
+     * fireRateBonus: 초당 추가 발사 횟수. bulletSpeedBonus: 프레임당 추가 탄속(픽셀).
+     */
     public static final class Modifiers {
-        public final double fireRateMultiplier, bulletSpeedMultiplier;
+        public final double fireRateBonus, bulletSpeedBonus;
         public final boolean enemyMovementBlocked;
-        public Modifiers(double fireRate, double bulletSpeed, boolean blocked) {
-            positive(fireRate, "fireRate"); positive(bulletSpeed, "bulletSpeed");
-            fireRateMultiplier = fireRate; bulletSpeedMultiplier = bulletSpeed;
+        public Modifiers(double fireRateBonus, double bulletSpeedBonus, boolean blocked) {
+            nonNegative(fireRateBonus, "fireRateBonus"); nonNegative(bulletSpeedBonus, "bulletSpeedBonus");
+            this.fireRateBonus = fireRateBonus; this.bulletSpeedBonus = bulletSpeedBonus;
             enemyMovementBlocked = blocked;
         }
-        public static Modifiers neutral() { return new Modifiers(1.0, 1.0, false); }
+        public static Modifiers neutral() { return new Modifiers(0.0, 0.0, false); }
     }
 
     /** 종류의 불변 정의 정보. 현재 소유/판매 여부와 무관하다. */
@@ -105,12 +110,15 @@ public final class ItemAPI {
         public final DurationKind durationKind;
         public final Long durationMillis;
         public final Integer charges;
+        /** 중첩 효과(UNTIL_RUN_END)의 첫 획득 보너스. 이후 획득은 증가폭이 줄어든다. */
         public final Double magnitude;
+        /** 중첩 효과의 최대 중첩 수. 그 외 null. */
+        public final Integer maxStacks;
         public final Set<GrantTiming> supportedGrantTimings;
         public ItemInfo(String itemId, String name, String description, String iconKey,
                         ActivationMode mode, EffectKind kind, DurationKind duration,
                         Long milliseconds, Integer charges, Double magnitude,
-                        Set<GrantTiming> timings) {
+                        Integer maxStacks, Set<GrantTiming> timings) {
             this.itemId = text(itemId, "itemId"); displayName = text(name, "name");
             this.description = required(description, "description"); this.iconKey = text(iconKey, "iconKey");
             activationMode = required(mode, "mode"); effectKind = required(kind, "kind");
@@ -118,7 +126,9 @@ public final class ItemAPI {
             if (milliseconds != null && milliseconds <= 0) throw new IllegalArgumentException("durationMillis");
             if (charges != null && charges <= 0) throw new IllegalArgumentException("charges");
             if (magnitude != null) positive(magnitude, "magnitude");
+            if (maxStacks != null && maxStacks <= 0) throw new IllegalArgumentException("maxStacks");
             durationMillis = milliseconds; this.charges = charges; this.magnitude = magnitude;
+            this.maxStacks = maxStacks;
             required(timings, "timings");
             if (timings.isEmpty()) throw new IllegalArgumentException("timings");
             for (GrantTiming timing : timings) required(timing, "timing");
@@ -130,7 +140,12 @@ public final class ItemAPI {
     public static final class DropRule {
         public final double probability;
         public final Map<String, Double> weights;
+        /** itemId → 중첩 1회당 가중치 배율(0~1). 없으면 1(감소 없음). 최대 중첩이면 드랍하지 않는다. */
+        public final Map<String, Double> stackDecay;
         public DropRule(double probability, Map<String, Double> weights) {
+            this(probability, weights, Collections.<String, Double>emptyMap());
+        }
+        public DropRule(double probability, Map<String, Double> weights, Map<String, Double> stackDecay) {
             finite(probability, "probability");
             if (probability < 0 || probability > 1) throw new IllegalArgumentException("probability");
             this.probability = probability;
@@ -143,6 +158,20 @@ public final class ItemAPI {
                 copy.put(entry.getKey(), weight);
             }
             this.weights = Collections.unmodifiableMap(copy);
+            required(stackDecay, "stackDecay");
+            Map<String, Double> decay = new LinkedHashMap<String, Double>();
+            for (Map.Entry<String, Double> entry : stackDecay.entrySet()) {
+                text(entry.getKey(), "itemId"); double factor = required(entry.getValue(), "decay");
+                finite(factor, "decay");
+                if (factor < 0 || factor > 1) throw new IllegalArgumentException("decay");
+                decay.put(entry.getKey(), factor);
+            }
+            this.stackDecay = Collections.unmodifiableMap(decay);
+        }
+        /** 현재 중첩 수를 반영한 가중치. */
+        double weightFor(String itemId, double weight, int stacks) {
+            Double factor = stackDecay.get(itemId);
+            return factor == null || stacks <= 0 ? weight : weight * Math.pow(factor, stacks);
         }
     }
 
@@ -250,11 +279,16 @@ public final class ItemAPI {
         public final ItemInfo item;
         public final Long remainingMillis;
         public final Integer remainingCharges;
-        public EffectView(long id, ItemInfo item, Long time, Integer charges) {
+        /** 중첩 효과의 현재 중첩 수. 그 외 null. */
+        public final Integer stacks;
+        public EffectView(long id, ItemInfo item, Long time, Integer charges) { this(id, item, time, charges, null); }
+        public EffectView(long id, ItemInfo item, Long time, Integer charges, Integer stacks) {
             if (id <= 0) throw new IllegalArgumentException("effectId");
             if (time != null && time <= 0) throw new IllegalArgumentException("remainingMillis");
             if (charges != null && charges <= 0) throw new IllegalArgumentException("remainingCharges");
+            if (stacks != null && stacks <= 0) throw new IllegalArgumentException("stacks");
             effectId = id; this.item = required(item, "item"); remainingMillis = time; remainingCharges = charges;
+            this.stacks = stacks;
         }
     }
 
@@ -314,6 +348,10 @@ public final class ItemAPI {
     }
     static void finite(double value, String name) {
         if (Double.isNaN(value) || Double.isInfinite(value)) throw new IllegalArgumentException(name + " must be finite");
+    }
+    static void nonNegative(double value, String name) {
+        finite(value, name);
+        if (value < 0) throw new IllegalArgumentException(name + " must not be negative");
     }
     static void positive(double value, String name) {
         finite(value, name);
