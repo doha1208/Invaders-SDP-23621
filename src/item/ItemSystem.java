@@ -11,21 +11,21 @@ import entity.Entity;
 import item.ItemAPI.*;
 
 /**
- * 게임 화면이 쓰는 아이템 시스템 연결 창구. 게임 쪽에는 한 줄짜리 호출만 남기는 것이 목적이다.
- * LevelRules/LifePort/PlayerSnapshot 생성, 프레임 시간 계산, 배율 계산 같은 번역은 전부 여기서 한다.
- * 상점·HUD·이펙트 팀은 api()의 ItemAPI를 사용한다.
+ * Bridge between the game screen and the item system. The goal is to leave only one-line calls on the game side.
+ * All translation (building LevelRules/LifePort/PlayerSnapshot, frame timing, bonus math) happens here.
+ * Shop, HUD and effects teams use the ItemAPI from api().
  *
- * 한 판(run)에 하나. GameScreen은 레벨마다 새로 만들어지므로 판 단위 인스턴스를 이 클래스가 보관한다.
- * 레벨 1은 항상 새 판의 시작이므로 forLevel(1)이 새 인스턴스를 만든다.
- * 같은 게임 상태 소유 스레드에서만 호출한다.
+ * One per run. GameScreen is recreated every level, so this class keeps the run-wide instance.
+ * Level 1 always starts a new run, so forLevel(1) creates a new instance.
+ * Call only from the thread that owns game state.
  */
 public final class ItemSystem {
-    /** HUD 구분선 아래부터 드랍이 존재한다 (GameScreen의 구분선 높이와 같다). */
+    /** Drops exist below the HUD separator line (same height as GameScreen's separator). */
     private static final double PLAY_AREA_TOP = 40;
 
     private static ItemSystem current;
 
-    /** 이 판의 밸런스 수치 (res/item-balance.properties). 판 시작 시 한 번 읽는다. */
+    /** Balance values of this run (res/item-balance.properties). Read once when the run starts. */
     private final ItemBalance balance;
     private final ItemManager manager;
     private final ItemAPI api;
@@ -33,7 +33,7 @@ public final class ItemSystem {
     private int levelNumber;
     private long lastUpdateNanos = -1;
 
-    /** 게임 화면이 목숨/점수 접근을 넘기는 통로. 아이템 시스템은 목숨/점수를 소유하지 않는다. */
+    /** Lets the game screen hand over access to lives/score. The item system does not own lives or score. */
     public interface GameHooks {
         int getLives();
         void addLife();
@@ -46,21 +46,21 @@ public final class ItemSystem {
         api = new ItemAPI(manager);
     }
 
-    /** 레벨 번호에 맞는 판 인스턴스. 레벨 1이거나 판이 없으면 새 판을 시작한다. */
+    /** Run instance for the level number. Starts a new run at level 1 or when there is no run. */
     public static ItemSystem forLevel(int level) {
         if (level <= 1 || current == null) current = new ItemSystem(new Random());
         return current;
     }
 
-    /** 진행 중인 판. 판 밖(메뉴 등)에서는 null일 수 있다. */
+    /** The current run. May be null outside a run (menus, etc.). */
     public static ItemSystem current() { return current; }
 
-    /** 상점·HUD·이펙트 팀용 일반 기능 창구. */
+    /** General entry point for the shop, HUD and effects teams. */
     public ItemAPI api() { return api; }
 
     /**
-     * 레벨 시작. 화면 크기와 플레이어 기체 위치로 드랍 영역을 정한다(바닥 = 기체 아래쪽).
-     * 이전 레벨을 닫지 않았으면 먼저 닫는다.
+     * Starts a level. The drop area comes from the screen size and the player ship position (floor = bottom of the ship).
+     * Ends the previous level first if it was not ended.
      */
     public void beginLevel(int level, int screenWidth, Entity ship, GameHooks gameHooks) {
         hooks = ItemAPI.required(gameHooks, "hooks");
@@ -75,21 +75,21 @@ public final class ItemSystem {
         lastUpdateNanos = -1;
     }
 
-    /** 매 프레임 호출. 경과 시간은 직접 잰다. shipAvailable=false면 획득/사용하지 않는다. */
+    /** Called every frame. Measures elapsed time itself. No pickup/use when shipAvailable=false. */
     public void update(Entity ship, boolean shipAvailable) {
         if (!isLevelActive()) return;
         long now = System.nanoTime(), delta = 0;
         if (lastUpdateNanos < 0) lastUpdateNanos = now;
         else {
             delta = (now - lastUpdateNanos) / 1_000_000L;
-            lastUpdateNanos += delta * 1_000_000L; // 1ms 미만 나머지는 다음 프레임으로 넘긴다.
+            lastUpdateNanos += delta * 1_000_000L; // Carries the sub-millisecond remainder to the next frame.
         }
         Bounds bounds = new Bounds(ship.getPositionX(), ship.getPositionY(),
             Math.max(1, ship.getWidth()), Math.max(1, ship.getHeight()));
         manager.update(delta, new PlayerSnapshot(bounds, shipAvailable, shipAvailable));
     }
 
-    /** 적 처치 시 호출. 적의 중심에서 드랍을 추첨한다. */
+    /** Called when an enemy is defeated. Rolls a drop at the enemy's center. */
     public void onEnemyDefeated(Entity enemy, boolean special) {
         if (!isLevelActive()) return;
         api.onEnemyDefeated(special ? DropSource.SPECIAL_ENEMY : DropSource.REGULAR_ENEMY,
@@ -97,37 +97,37 @@ public final class ItemSystem {
             enemy.getPositionY() + enemy.getHeight() / 2.0);
     }
 
-    /** 플레이어 피격 시 목숨을 깎기 전에 호출. true면 방패가 막았으므로 피해를 주지 않는다. */
+    /** Called when the player is hit, before taking a life. true means the shield blocked it, so no damage. */
     public boolean tryBlockHit() { return api.tryBlockHit(); }
 
-    /** 보관함 칸의 아이템 사용. */
+    /** Uses the item in an inventory slot. */
     public UseResult useSlot(int slot) { return api.useSlot(slot); }
 
-    /** 아이템 연사 보너스: 초당 추가 발사 횟수. 기본 공속과 별개로 더해진다. */
+    /** Item fire rate bonus: extra shots per second, added on top of the base fire rate. */
     public double fireRateBonus() { return api.getModifiers().fireRateBonus; }
 
-    /** 아이템 탄속 보너스: 프레임당 추가 픽셀. 기본 탄속과 별개로 더해진다. */
+    /** Item bullet speed bonus: extra pixels per frame, added on top of the base bullet speed. */
     public double bulletSpeedBonus() { return api.getModifiers().bulletSpeedBonus; }
 
     /**
-     * (기본 공속)+(아이템 공속)의 발사 간격(ms). 기본 간격은 바꾸지 않고 초당 발사 횟수에 보너스를 더한다.
-     * 예: 기본 750ms(초당 1.33발) + 보너스 0.5 → 초당 1.83발 → 545ms.
+     * Shot interval (ms) for (base fire rate) + (item fire rate). The base interval is kept; the bonus is added to shots per second.
+     * e.g. base 750ms (1.33 shots/s) + bonus 0.5 → 1.83 shots/s → 545ms.
      */
     public int fireInterval(int baseMillis) {
         double shotsPerSecond = 1000.0 / baseMillis + fireRateBonus();
         return Math.max(1, (int) Math.round(1000.0 / shotsPerSecond));
     }
 
-    /** (기본 탄속)+(아이템 탄속). 방향(부호)은 유지한다. Bullet 속도가 int라 반올림된다. */
+    /** (base bullet speed) + (item bullet speed). Keeps the direction (sign). Rounded because Bullet speed is an int. */
     public int bulletSpeed(int baseSpeed) {
         double speed = Math.abs(baseSpeed) + bulletSpeedBonus();
         return (int) Math.round(baseSpeed < 0 ? -speed : speed);
     }
 
-    /** true면 적이 움직이지 않아야 한다 (프리즈). */
+    /** true means enemies must not move (freeze). */
     public boolean enemiesFrozen() { return api.getModifiers().enemyMovementBlocked; }
 
-    /** 바닥 드랍을 그린다. 정식 스프라이트가 정해지기 전의 기본 모양이다. */
+    /** Draws the drops on the field. Placeholder shapes until proper sprites are decided. */
     public void drawDrops(Graphics graphics) {
         for (DropView drop : api.getView().drops) {
             int x = (int) drop.bounds.x, y = (int) drop.bounds.y;
@@ -139,19 +139,19 @@ public final class ItemSystem {
         }
     }
 
-    /** 레벨 종료. 레벨 중이 아니면 아무것도 하지 않는다. */
+    /** Ends the level. Does nothing if no level is active. */
     public void endLevel() {
         if (isLevelActive()) manager.endLevel();
     }
 
-    /** 사운드/이펙트용 사건. 가져가면 비워진다. */
+    /** Events for sound/effects. Cleared once drained. */
     public List<ItemEvent> drainEvents() { return api.drainEvents(); }
 
     public int getLevelNumber() { return levelNumber; }
 
     private boolean isLevelActive() { return hooks != null && manager.isLevelActive(); }
 
-    /** 목숨 아이템: 상한 미만이면 목숨 +1, 상한이면 점수 보상. 어느 쪽이든 아이템은 소비된다. */
+    /** Life item: +1 life below the cap, a score bonus at the cap. The item is consumed either way. */
     private final LifePort lifePort = new LifePort() {
         public boolean canAddLife() { return true; }
         public boolean tryAddLife() {

@@ -9,15 +9,15 @@ import java.util.Map;
 import item.ItemAPI.*;
 
 /**
- * 종류의 데이터 사전. 게임 상태/가격/재고/드랍 확률은 저장하지 않는다.
- * 이 클래스는 package-private이다. 다른 팀은 ItemAPI의 조회 함수만 사용한다.
- * ItemInfo 자체를 불변 정의로 재사용한다. 별도 Definition/Repository 파일을 만들지 않는다.
+ * Data dictionary of item kinds. Does not store game state, prices, stock or drop rates.
+ * This class is package-private. Other teams use only the lookup functions in ItemAPI.
+ * ItemInfo itself is reused as the immutable definition. No separate Definition/Repository files.
  */
 class ItemDefinitions {
     private final Map<String, ItemInfo> itemsById;
     private final List<ItemInfo> items;
 
-    /** 설정 파일(res/item-balance.properties)의 수치로 카탈로그를 만든다. */
+    /** Builds the catalog from the values in the config file (res/item-balance.properties). */
     ItemDefinitions() { this(ItemBalance.load()); }
 
     ItemDefinitions(ItemBalance balance) {
@@ -113,24 +113,24 @@ class ItemDefinitions {
     }
 
     /**
-     * 등록된 ID를 조회한다. 없는 유효 ID만 null이다. 목록은 한 판 동안 불변이다.
-     * 기본 등록: life(즉시 목숨1), shield(수동, 시간/횟수), rapid_fire(즉시 배율/스테이지),
-     * bullet_speed(즉시 배율/스테이지), freeze(수동, 시간 동안 이동차단).
-     * 모두 NOW 지원. rapid_fire/bullet_speed만 NEXT_LEVEL 지원. 수치는 ItemBalance(설정 파일)에서 온다.
+     * Looks up a registered ID. Returns null only for a valid but unknown ID. The list is immutable for a run.
+     * Registered by default: life (instant, +1 life), shield (manual, time/charges), rapid_fire (on pickup, stacks for the run),
+     * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time).
+     * All support NOW. Only rapid_fire/bullet_speed support NEXT_LEVEL. Values come from ItemBalance (config file).
      */
     ItemInfo find(String itemId) { return itemsById.get(itemId); }
 
-    /** 등록 순서의 불변 목록. 상점의 판매 목록이 아니다. find와 같은 정의를 사용한다. */
+    /** Immutable list in registration order. Not the shop's sale list. Uses the same definitions as find. */
     List<ItemInfo> all() { return items; }
 
     /**
-     * 상태 변경 없이 모든 정의/규칙을 검증한다.
-     * 두 DropSource 규칙, 존재하는 ID, 양의 유한 가중치 합(p>0일 때), 설정 영역을 검증한다.
-     * 정의의 kind/duration/수치 조합도 확인한다. 동일 kind 중복 효과 정책은 REJECT다.
-     * NEXT_LEVEL은 ON_PICKUP + UNTIL_RUN_END인 RAPID_FIRE/BULLET_SPEED만 가능하다.
-     * LIFE는 INSTANT, SHIELD/FREEZE는 TIMED, 두 중첩 효과는 UNTIL_RUN_END로 고정한다.
-     * SHIELD는 durationMillis/charges, FREEZE는 durationMillis, 두 중첩 효과는 magnitude/maxStacks가 필수다.
-     * 지원하지 않는 값 조합은 예외. 잘못된 설정을 자동 보정하거나 게임을 시작하지 않는다.
+     * Validates all definitions/rules without changing state.
+     * Checks both DropSource rules, existing IDs, a positive finite weight sum (when p>0), and the configured area.
+     * Also checks each definition's kind/duration/value combination. Duplicate effects of the same kind are REJECTed.
+     * NEXT_LEVEL is allowed only for RAPID_FIRE/BULLET_SPEED with ON_PICKUP + UNTIL_RUN_END.
+     * LIFE is fixed to INSTANT, SHIELD/FREEZE to TIMED, and the two stacking effects to UNTIL_RUN_END.
+     * SHIELD requires durationMillis/charges, FREEZE requires durationMillis, the two stacking effects require magnitude/maxStacks.
+     * Unsupported combinations throw. Invalid settings are never auto-corrected and the game does not start with them.
      */
     void validate(LevelRules rules) {
         ItemAPI.required(rules, "rules");
