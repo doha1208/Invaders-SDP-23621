@@ -41,6 +41,8 @@ public final class ItemSystem {
     /** Short message for the player about the last item action, and when it was set. */
     private String notice;
     private long noticeTime;
+    /** True while a slot item is being used, so its effect start shows no pickup notice. */
+    private boolean usingSlot;
 
     /** Lets the game screen hand over access to lives/score. The item system does not own lives or score. */
     public interface GameHooks {
@@ -112,14 +114,18 @@ public final class ItemSystem {
     /** Called when the player is hit, before taking a life. true means the shield blocked it, so no damage. */
     public boolean tryBlockHit() { return api.tryBlockHit(); }
 
-    /** Uses the item in an inventory slot. Tells the player why when it cannot be used. */
+    /** Uses the item in an inventory slot. Tells the player when the item is already active. */
     public UseResult useSlot(int slot) {
         List<ItemInfo> slots = api.getView().slots;
         ItemInfo item = slot >= 0 && slot < slots.size() ? slots.get(slot) : null;
-        UseResult result = api.useSlot(slot);
-        if (result == UseResult.EMPTY_SLOT) {
-            showNotice("Slot " + (slot + 1) + " is empty");
-        } else if (result == UseResult.EFFECT_ALREADY_ACTIVE && item != null) {
+        usingSlot = true;
+        UseResult result;
+        try {
+            result = api.useSlot(slot);
+        } finally {
+            usingSlot = false;
+        }
+        if (result == UseResult.EFFECT_ALREADY_ACTIVE && item != null) {
             showNotice(item.displayName + " is already active");
             logger.info("Item not used: " + item.displayName + " is already active.");
         }
@@ -185,7 +191,7 @@ public final class ItemSystem {
             } else {
                 hooks.addScore(balance.lifeCapBonusScore);
                 logger.info("Life item at max lives: +" + balance.lifeCapBonusScore + " score.");
-                showNotice("Max lives: +" + balance.lifeCapBonusScore + " score");
+                showNotice("Max lives: +" + balance.lifeCapBonusScore);
             }
             return true;
         }
@@ -203,28 +209,27 @@ public final class ItemSystem {
                 if (event.slotIndex != null) {
                     int key = event.slotIndex + 1;
                     logger.info("Item collected: " + name + " stored in slot " + key + ".");
-                    showNotice(name + " stored - press " + key + " to use");
+                    showNotice(name + " (press " + key + ")");
                 } else {
                     logger.info("Item collected: " + name + ".");
                 }
                 break;
             case ITEM_USED:
                 logger.info("Item used: " + name + " from slot " + (event.slotIndex + 1) + ".");
+                notice = null; // a "(press N)" hint is outdated once the item is used
                 break;
             case EFFECT_STARTED: {
                 Integer stacks = stacksOf(event.effectId);
                 String label = name + (stacks != null ? " x" + stacks : "");
                 logger.info("Item effect started: " + label + ".");
-                showNotice(label + "!");
+                if (!usingSlot) showNotice(label); // picked up, not used from a slot
                 break;
             }
             case EFFECT_ENDED:
                 logger.info("Item effect ended: " + name + " (" + event.endReason + ").");
-                if (event.endReason == EffectEndReason.EXPIRED) showNotice(name + " ended");
                 break;
             case SHIELD_BLOCKED:
                 logger.info("Item effect: shield blocked a hit.");
-                showNotice("Shield blocked a hit!");
                 break;
             case ITEM_EXPIRED:
                 logger.info("Item drop disappeared: " + name + ".");
