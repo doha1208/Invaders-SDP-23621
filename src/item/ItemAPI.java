@@ -39,7 +39,7 @@ public final class ItemAPI {
     public interface LifePort {
         /** 읽기 전용. 가능 여부만 확인하며 상태/이벤트를 변경하지 않는다. */
         boolean canAddLife();
-        /** true: 목숨 정확히 1개 증가 완료. false: 아무 상태도 변경하지 않음. */
+        /** true: 목숨 아이템 효과 적용 완료(목숨 +1, 또는 상한이면 점수 보상). false: 아무 상태도 변경하지 않음. */
         boolean tryAddLife();
     }
 
