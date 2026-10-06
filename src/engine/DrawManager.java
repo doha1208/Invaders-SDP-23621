@@ -49,6 +49,8 @@ public final class DrawManager {
 	private static final int ITEM_SLOT_HEIGHT = 16;
 	/** Item notice baseline, measured up from the bottom of the screen. */
 	private static final int ITEM_NOTICE_BOTTOM_OFFSET = 60;
+	/** The shield bubble blinks during this many last milliseconds. */
+	private static final long SHIELD_BLINK_MILLIS = 2000;
 	/** Normal sized font. */
 	private static Font fontRegular;
 	/** Normal sized font properties. */
@@ -288,6 +290,38 @@ public final class DrawManager {
 	public void drawItemDrops(final ItemSystem items) {
 		backBufferGraphics.setFont(fontRegular);
 		items.drawDrops(backBufferGraphics);
+	}
+
+	/**
+	 * Draws the shield item around the player ship while it is active
+	 * (Team CS - Item System): a cyan bubble that blinks during its last
+	 * seconds.
+	 *
+	 * @param ship
+	 *            Player ship.
+	 * @param items
+	 *            Item system of the current run.
+	 */
+	public void drawItemShield(final Entity ship, final ItemSystem items) {
+		ItemAPI.EffectView shield = items.shield();
+		if (shield == null)
+			return;
+		long remaining = shield.remainingMillis == null ? Long.MAX_VALUE
+				: shield.remainingMillis;
+		if (remaining < SHIELD_BLINK_MILLIS
+				&& (System.currentTimeMillis() / 150) % 2 == 0)
+			return;
+		int padding = 6;
+		int x = ship.getPositionX() - padding;
+		int y = ship.getPositionY() - padding;
+		int width = ship.getWidth() + padding * 2;
+		int height = ship.getHeight() + padding * 2;
+		Color color = ItemSystem.colorOf(shield.item.effectKind);
+		backBufferGraphics.setColor(new Color(color.getRed(),
+				color.getGreen(), color.getBlue(), 60));
+		backBufferGraphics.fillOval(x, y, width, height);
+		backBufferGraphics.setColor(color);
+		backBufferGraphics.drawOval(x, y, width, height);
 	}
 
 	/**

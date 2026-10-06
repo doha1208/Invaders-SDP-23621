@@ -135,6 +135,14 @@ public final class ItemSystem {
     /** true means enemies must not move (freeze). */
     public boolean enemiesFrozen() { return api.getModifiers().enemyMovementBlocked; }
 
+    /** The running shield effect, or null when the ship has no shield. */
+    public EffectView shield() {
+        if (!isLevelActive()) return null;
+        for (EffectView effect : api.getView().effects)
+            if (effect.item.effectKind == EffectKind.SHIELD) return effect;
+        return null;
+    }
+
     /** Draws the drops on the field. Placeholder shapes until proper sprites are decided. */
     public void drawDrops(Graphics graphics) {
         for (DropView drop : api.getView().drops) {
