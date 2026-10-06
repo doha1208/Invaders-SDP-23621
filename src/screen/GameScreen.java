@@ -339,6 +339,7 @@ public class GameScreen extends Screen {
 					/ 12);
 			drawManager.drawHorizontalLine(this, this.height / 2 + this.height
 					/ 12);
+			drawManager.drawItemHint(this, this.items); // Item System (Team CS)
 		}
 
 		// Draw the notification after every gameplay and HUD element.
