@@ -23,6 +23,8 @@ import entity.EnemyShip;
 import entity.EnemyShipFormation;
 import entity.Entity;
 import entity.Ship;
+import item.ItemAPI.ItemEvent;
+import item.ItemSystem;
 
 /**
  * Implements the game screen, where the action happens.
@@ -109,6 +111,8 @@ public class GameScreen extends Screen {
 	/** Diamonds earned this run but not yet cashed out; lost on death,
 	 * banked into DiamondManager only when the player cashes out. */
 	private int pendingDiamonds;
+	/** Item system of this run (Team CS). Kept across levels by ItemSystem. */
+	private ItemSystem items;
 
 	/**
 	 * Constructor, establishes the properties of the screen.
@@ -167,6 +171,15 @@ public class GameScreen extends Screen {
 		this.achievementPopupQueue = new LinkedList<Achievement>();
 		this.coinDropManager = new CoinDropManager();
 
+		// Item System (Team CS): level 1 starts a new run, later levels keep it.
+		this.items = ItemSystem.forLevel(this.level);
+		this.items.beginLevel(this.level, this.width, this.ship,
+				new ItemSystem.GameHooks() {
+					public int getLives() { return lives; }
+					public void addLife() { lives++; }
+					public void addScore(final int points) { score += points; }
+				});
+
 		// Special input delay / countdown.
 		this.gameStartTime = System.currentTimeMillis();
 		this.inputDelay = Core.getCooldown(INPUT_DELAY);
@@ -180,6 +193,7 @@ public class GameScreen extends Screen {
 	 */
 	public final int run() {
 		super.run();
+		this.items.endLevel(); // Item System (Team CS)
 
 		this.score += LIFE_SCORE * (this.lives - 1);
 		this.logger.info("Screen cleared with a score of " + this.score);
@@ -241,9 +255,14 @@ public class GameScreen extends Screen {
 			this.enemyShipFormation.shoot(this.bullets);
 		}
 
+		// Item System (Team CS): drops fall/expire, pickups, effect timers.
+		this.items.update(this.ship, this.inputDelay.checkFinished()
+				&& !this.levelFinished && this.lives > 0
+				&& !this.ship.isDestroyed());
 		manageCollisions();
 		cleanBullets();
 		updateCoins();
+		handleItemEvents();
 		updateAchievementPopup();
 		draw();
 
@@ -290,6 +309,7 @@ public class GameScreen extends Screen {
 		for (Coin coin : this.coins)
 			drawManager.drawCoin(coin, coin.getPositionX(),
 					coin.getPositionY());
+		drawManager.drawItemDrops(this.items); // Item System (Team CS)
 
 		// Interface.
 		drawManager.drawScore(this, this.score);
@@ -364,6 +384,7 @@ public class GameScreen extends Screen {
 						this.shipsDestroyed++;
 						this.enemyShipFormation.destroy(enemyShip);
 						maybeDropCoin(enemyShip);
+						this.items.onEnemyDefeated(enemyShip, false);
 						showUnlockedAchievement(Core.getAchievementManager()
 								.recordEnemyDefeated());
 						recyclable.add(bullet);
@@ -375,6 +396,7 @@ public class GameScreen extends Screen {
 					this.shipsDestroyed++;
 					this.enemyShipSpecial.destroy();
 					dropCoin(this.enemyShipSpecial, BONUS_COIN_VALUE);
+					this.items.onEnemyDefeated(this.enemyShipSpecial, true);
 					showUnlockedAchievement(Core.getAchievementManager()
 							.recordEnemyDefeated());
 					this.enemyShipSpecialExplosionCooldown.reset();
@@ -452,6 +474,25 @@ public class GameScreen extends Screen {
 				+ CurrencyManager.getInstance().getCoins());
 		CoinPool.recycle(this.coins);
 		this.coins.clear();
+	}
+
+	/**
+	 * Takes this frame's item events (Team CS) so they don't pile up, and
+	 * logs the ones the player triggers. Sound and effects can hook in here.
+	 */
+	private void handleItemEvents() {
+		for (ItemEvent event : this.items.drainEvents()) {
+			switch (event.type) {
+			case ITEM_COLLECTED:
+			case ITEM_USED:
+			case SHIELD_BLOCKED:
+			case EFFECT_ENDED:
+				this.logger.info("Item " + event.type + ": " + event.itemId);
+				break;
+			default:
+				break;
+			}
+		}
 	}
 
 	/**

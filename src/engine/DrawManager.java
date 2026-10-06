@@ -17,6 +17,7 @@ import screen.Screen;
 import entity.Coin;
 import entity.Entity;
 import entity.Ship;
+import item.ItemSystem;
 
 /**
  * Manages screen drawing.
@@ -266,6 +267,19 @@ public final class DrawManager {
 		backBufferGraphics.setColor(coin.getColor());
 		backBufferGraphics.fillOval(positionX, positionY, coin.getWidth(),
 				coin.getHeight());
+	}
+
+	/**
+	 * Draws the item drops on the field (Team CS - Item System). Drops have
+	 * no entry in the shared sprite file yet, so the item system draws
+	 * placeholder shapes on the back buffer.
+	 *
+	 * @param items
+	 *            Item system of the current run.
+	 */
+	public void drawItemDrops(final ItemSystem items) {
+		backBufferGraphics.setFont(fontRegular);
+		items.drawDrops(backBufferGraphics);
 	}
 
 	/**
