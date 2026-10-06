@@ -42,6 +42,13 @@ public final class DrawManager {
 	private static Graphics backBufferGraphics;
 	/** Buffer image. */
 	private static BufferedImage backBuffer;
+	/** Top of the item panel, right below the HUD line (Team CS). */
+	private static final int ITEM_PANEL_TOP = 43;
+	/** Size of one item slot box in the item panel. */
+	private static final int ITEM_SLOT_WIDTH = 52;
+	private static final int ITEM_SLOT_HEIGHT = 16;
+	/** Item notice baseline, measured up from the bottom of the screen. */
+	private static final int ITEM_NOTICE_BOTTOM_OFFSET = 60;
 	/** Normal sized font. */
 	private static Font fontRegular;
 	/** Normal sized font properties. */
@@ -284,9 +291,10 @@ public final class DrawManager {
 	}
 
 	/**
-	 * Draws the item slots and running effects on the free line below the
-	 * player ship (Team CS - Item System). Slots are on the left with the
-	 * key that uses them; effects are on the right with stacks or seconds.
+	 * Draws the item panel right below the HUD line (Team CS - Item System):
+	 * inventory slots on the left, each with the number key that uses it,
+	 * and running effects on the right with stacks or seconds left. The
+	 * latest item notice is shown above the player ship.
 	 *
 	 * @param screen
 	 *            Screen to draw on.
@@ -295,36 +303,68 @@ public final class DrawManager {
 	 */
 	public void drawItemHud(final Screen screen, final ItemSystem items) {
 		ItemAPI.View view = items.api().getView();
-		int baseline = screen.getHeight() - 3;
-		backBufferGraphics.setFont(fontRegular);
+		Font font = fontRegular.deriveFont(12f);
+		FontMetrics metrics = backBufferGraphics.getFontMetrics(font);
+		backBufferGraphics.setFont(font);
+		int baseline = ITEM_PANEL_TOP + ITEM_SLOT_HEIGHT - 4;
 
-		StringBuilder slots = new StringBuilder();
+		// Slots: "1 [Shield]" ... an empty slot is a dark box.
+		int x = 6;
 		for (int i = 0; i < view.slots.size(); i++) {
 			ItemAPI.ItemInfo item = view.slots.get(i);
-			if (i > 0)
-				slots.append(' ');
-			slots.append(i + 1).append(':')
-					.append(item == null ? "-" : item.displayName);
+			backBufferGraphics.setColor(Color.GRAY);
+			backBufferGraphics.drawString(Integer.toString(i + 1), x, baseline);
+			x += metrics.stringWidth("0") + 3;
+			backBufferGraphics.setColor(item == null ? Color.DARK_GRAY
+					: ItemSystem.colorOf(item.effectKind));
+			backBufferGraphics.drawRect(x, ITEM_PANEL_TOP, ITEM_SLOT_WIDTH,
+					ITEM_SLOT_HEIGHT);
+			if (item != null)
+				backBufferGraphics.drawString(item.displayName, x + 4, baseline);
+			x += ITEM_SLOT_WIDTH + 8;
 		}
-		backBufferGraphics.setColor(Color.WHITE);
-		backBufferGraphics.drawString(slots.toString(), 5, baseline);
 
-		StringBuilder effects = new StringBuilder();
-		for (ItemAPI.EffectView effect : view.effects) {
-			if (effects.length() > 0)
-				effects.append(' ');
-			effects.append(shortItemName(effect.item.effectKind));
+		// Effects, right-aligned: "RF x2  SH 8s".
+		int right = screen.getWidth() - 6;
+		for (int i = view.effects.size() - 1; i >= 0; i--) {
+			ItemAPI.EffectView effect = view.effects.get(i);
+			String label = shortItemName(effect.item.effectKind);
 			if (effect.stacks != null)
-				effects.append(" x").append(effect.stacks);
+				label += " x" + effect.stacks;
 			else if (effect.remainingMillis != null)
-				effects.append(' ')
-						.append((effect.remainingMillis + 999) / 1000)
-						.append('s');
+				label += " " + (effect.remainingMillis + 999) / 1000 + "s";
+			right -= metrics.stringWidth(label);
+			backBufferGraphics.setColor(ItemSystem
+					.colorOf(effect.item.effectKind));
+			backBufferGraphics.drawString(label, right, baseline);
+			right -= 10;
 		}
-		backBufferGraphics.setColor(Color.YELLOW);
-		backBufferGraphics.drawString(effects.toString(), screen.getWidth()
-				- 5 - fontRegularMetrics.stringWidth(effects.toString()),
-				baseline);
+
+		String notice = items.getNotice();
+		if (notice != null) {
+			backBufferGraphics.setColor(Color.YELLOW);
+			drawCenteredRegularString(screen, notice, screen.getHeight()
+					- ITEM_NOTICE_BOTTOM_OFFSET);
+		}
+	}
+
+	/**
+	 * Explains the items while the level countdown runs (Team CS - Item
+	 * System).
+	 *
+	 * @param screen
+	 *            Screen to draw on.
+	 * @param items
+	 *            Item system of the current run.
+	 */
+	public void drawItemHint(final Screen screen, final ItemSystem items) {
+		int slots = items.api().getView().slots.size();
+		backBufferGraphics.setColor(Color.GRAY);
+		drawCenteredRegularString(screen, "Catch item drops with your ship",
+				screen.getHeight() * 2 / 3);
+		drawCenteredRegularString(screen, "Keys 1-" + slots
+				+ " use stored items", screen.getHeight() * 2 / 3
+				+ fontRegularMetrics.getHeight());
 	}
 
 	/**

@@ -261,6 +261,7 @@ public final class ItemSystem {
             case SHIELD: return Color.CYAN;
             case RAPID_FIRE: return Color.ORANGE;
             case BULLET_SPEED: return Color.YELLOW;
+            case FREEZE: return new Color(150, 150, 255);
             default: return Color.WHITE;
         }
     }
