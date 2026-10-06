@@ -206,6 +206,9 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
+		// Item System (Team CS): item bonuses on top of the base fire rate/bullet speed.
+		this.ship.setItemBonuses(this.items.fireRateBonus(),
+				this.items.bulletSpeedBonus());
 
 		if (this.inputDelay.checkFinished() && !this.levelFinished) {
 
@@ -233,7 +236,7 @@ public class GameScreen extends Screen {
 
 			if (this.enemyShipSpecial != null) {
 				if (!this.enemyShipSpecial.isDestroyed())
-					this.enemyShipSpecial.move(2, 0);
+					this.enemyShipSpecial.move(this.items.enemiesFrozen() ? 0 : 2, 0);
 				else if (this.enemyShipSpecialExplosionCooldown.checkFinished())
 					this.enemyShipSpecial = null;
 
@@ -251,7 +254,8 @@ public class GameScreen extends Screen {
 			}
 
 			this.ship.update();
-			this.enemyShipFormation.update();
+			if (!this.items.enemiesFrozen()) // Freeze item (Team CS)
+				this.enemyShipFormation.update();
 			this.enemyShipFormation.shoot(this.bullets);
 		}
 
@@ -368,7 +372,8 @@ public class GameScreen extends Screen {
 			if (bullet.getSpeed() > 0) {
 				if (checkCollision(bullet, this.ship) && !this.levelFinished) {
 					recyclable.add(bullet);
-					if (!this.ship.isDestroyed()) {
+					if (!this.ship.isDestroyed()
+							&& !this.items.tryBlockHit()) { // Shield item (Team CS)
 						this.ship.destroy();
 						this.lives--;
 						this.damageDim.trigger(); // <-*AUTHORED BY: VFX TEAM (Effection)
