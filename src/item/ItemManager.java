@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
 
 import item.ItemAPI.*;
 
@@ -30,6 +31,8 @@ public final class ItemManager {
     private LevelRules rules;
     private LifePort lifePort;
     private PlayerSnapshot player;
+    /** Told about every event as it happens (logging/UI). The event queue is unaffected. */
+    private Consumer<ItemEvent> listener;
 
     /** Sets the run's inventory capacity and drop random source. Does not start a stage yet. */
     public ItemManager(int capacity, Random random) {
@@ -274,7 +277,12 @@ public final class ItemManager {
     private void emit(EventType type, String itemId, Long dropId, Long effectId, Integer slot,
                       Long pendingId, GrantRequest request, GrantStatus status,
                       EffectEndReason reason, Bounds bounds) {
-        events.add(new ItemEvent(nextEventId++, type, itemId, levelId(), dropId, effectId,
-            slot, pendingId, request, status, reason, bounds));
+        ItemEvent event = new ItemEvent(nextEventId++, type, itemId, levelId(), dropId, effectId,
+            slot, pendingId, request, status, reason, bounds);
+        events.add(event);
+        if (listener != null) listener.accept(event);
     }
+
+    /** Sets the listener told about every new event. The listener must not call back into the manager. */
+    void setEventListener(Consumer<ItemEvent> eventListener) { listener = eventListener; }
 }
