@@ -17,13 +17,17 @@ class ItemDefinitions {
     private final Map<String, ItemInfo> itemsById;
     private final List<ItemInfo> items;
 
-    ItemDefinitions() {
+    /** 설정 파일(res/item-balance.properties)의 수치로 카탈로그를 만든다. */
+    ItemDefinitions() { this(ItemBalance.load()); }
+
+    ItemDefinitions(ItemBalance balance) {
+        ItemAPI.required(balance, "balance");
         Map<String, ItemInfo> definitions = new LinkedHashMap<String, ItemInfo>();
 
         ItemInfo life = new ItemInfo(
             "life",
             "Life",
-            "Adds one life, or awards 500 points at the life cap.",
+            "Adds one life, or awards " + balance.lifeCapBonusScore + " points at the life cap.",
             "life",
             ActivationMode.ON_PICKUP,
             EffectKind.LIFE,
@@ -38,13 +42,14 @@ class ItemDefinitions {
         ItemInfo shield = new ItemInfo(
             "shield",
             "Shield",
-            "Blocks one incoming hit for up to 10 seconds.",
+            "Blocks " + balance.shieldCharges + " incoming hit(s) for up to "
+                + seconds(balance.shieldDurationMillis) + " seconds.",
             "shield",
             ActivationMode.MANUAL,
             EffectKind.SHIELD,
             DurationKind.TIMED,
-            10_000L,
-            1,
+            balance.shieldDurationMillis,
+            balance.shieldCharges,
             null,
             EnumSet.of(GrantTiming.NOW)
         );
@@ -53,14 +58,14 @@ class ItemDefinitions {
         ItemInfo rapidFire = new ItemInfo(
             "rapid_fire",
             "Rapid Fire",
-            "Increases firing rate by 50% until the level ends.",
+            "Multiplies firing rate by " + balance.rapidFireMultiplier + " until the level ends.",
             "rapid_fire",
             ActivationMode.ON_PICKUP,
             EffectKind.RAPID_FIRE,
             DurationKind.UNTIL_LEVEL_END,
             null,
             null,
-            1.5,
+            balance.rapidFireMultiplier,
             EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
         );
         definitions.put(rapidFire.itemId, rapidFire);
@@ -68,14 +73,14 @@ class ItemDefinitions {
         ItemInfo bulletSpeed = new ItemInfo(
             "bullet_speed",
             "Bullet Speed",
-            "Increases projectile speed by 10% until the level ends.",
+            "Multiplies projectile speed by " + balance.bulletSpeedMultiplier + " until the level ends.",
             "bullet_speed",
             ActivationMode.ON_PICKUP,
             EffectKind.BULLET_SPEED,
             DurationKind.UNTIL_LEVEL_END,
             null,
             null,
-            1.10,
+            balance.bulletSpeedMultiplier,
             EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL)
         );
         definitions.put(bulletSpeed.itemId, bulletSpeed);
@@ -83,12 +88,12 @@ class ItemDefinitions {
         ItemInfo freeze = new ItemInfo(
             "freeze",
             "Freeze",
-            "Stops all enemy movement for 5 seconds.",
+            "Stops all enemy movement for " + seconds(balance.freezeDurationMillis) + " seconds.",
             "freeze",
             ActivationMode.MANUAL,
             EffectKind.FREEZE,
             DurationKind.TIMED,
-            5_000L,
+            balance.freezeDurationMillis,
             null,
             null,
             EnumSet.of(GrantTiming.NOW)
@@ -102,9 +107,9 @@ class ItemDefinitions {
 
     /**
      * 등록된 ID를 조회한다. 없는 유효 ID만 null이다. 목록은 한 판 동안 불변이다.
-     * 기본 등록: life(즉시 목숨1), shield(수동 10초/1회), rapid_fire(즉시 1.5배/스테이지),
-     * bullet_speed(즉시 1.10배/스테이지), freeze(수동 5초 이동차단).
-     * 모두 NOW 지원. rapid_fire/bullet_speed만 NEXT_LEVEL 지원. 각 수치는 기획 합의와 대조한다.
+     * 기본 등록: life(즉시 목숨1), shield(수동, 시간/횟수), rapid_fire(즉시 배율/스테이지),
+     * bullet_speed(즉시 배율/스테이지), freeze(수동, 시간 동안 이동차단).
+     * 모두 NOW 지원. rapid_fire/bullet_speed만 NEXT_LEVEL 지원. 수치는 ItemBalance(설정 파일)에서 온다.
      */
     ItemInfo find(String itemId) { return itemsById.get(itemId); }
 
@@ -163,20 +168,20 @@ class ItemDefinitions {
                 case SHIELD:
                     requireDefinition(item, item.activationMode == ActivationMode.MANUAL
                         && item.durationKind == DurationKind.TIMED
-                        && Long.valueOf(10_000L).equals(item.durationMillis)
-                        && Integer.valueOf(1).equals(item.charges) && item.magnitude == null
+                        && item.durationMillis != null
+                        && item.charges != null && item.magnitude == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
                 case RAPID_FIRE:
-                    requireDefinition(item, isLevelMultiplier(item, 1.5));
+                    requireDefinition(item, isLevelMultiplier(item));
                     break;
                 case BULLET_SPEED:
-                    requireDefinition(item, isLevelMultiplier(item, 1.10));
+                    requireDefinition(item, isLevelMultiplier(item));
                     break;
                 case FREEZE:
                     requireDefinition(item, item.activationMode == ActivationMode.MANUAL
                         && item.durationKind == DurationKind.TIMED
-                        && Long.valueOf(5_000L).equals(item.durationMillis)
+                        && item.durationMillis != null
                         && item.charges == null && item.magnitude == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
@@ -188,13 +193,17 @@ class ItemDefinitions {
         requireValid(kinds.size() == EffectKind.values().length, "missing effect definition");
     }
 
-    private boolean isLevelMultiplier(ItemInfo item, double magnitude) {
+    private boolean isLevelMultiplier(ItemInfo item) {
         return item.activationMode == ActivationMode.ON_PICKUP
             && item.durationKind == DurationKind.UNTIL_LEVEL_END
             && item.durationMillis == null && item.charges == null
-            && Double.valueOf(magnitude).equals(item.magnitude)
+            && item.magnitude != null
             && item.supportedGrantTimings.equals(
                 EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL));
+    }
+
+    private static String seconds(long millis) {
+        return millis % 1000 == 0 ? Long.toString(millis / 1000) : Double.toString(millis / 1000.0);
     }
 
     private void requireDefinition(ItemInfo item, boolean condition) {
