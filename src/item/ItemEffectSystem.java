@@ -22,7 +22,7 @@ class ItemEffectSystem {
     ItemEffectSystem() { }
 
     /**
-     * TODO: 실제 적용 가능성의 읽기 전용 검사. 가능하면 null, 불가하면 실패 사유.
+     * 실제 적용 가능성의 읽기 전용 검사. 가능하면 null, 불가하면 실패 사유.
      * LIFE는 port.canAddLife만 호출한다. 나머지는 같은 kind가 실행 중인지 확인한다.
      * 정상 실패는 EFFECT_ALREADY_ACTIVE 또는 EFFECT_REJECTED만 반환한다.
      * 포트는 필요한 LIFE에서만 접근하며 슬롯·효과·ID·난수·시간을 변경하지 않는다.
@@ -35,7 +35,7 @@ class ItemEffectSystem {
     }
 
     /**
-     * TODO: 동기적으로 실제 적용하고 Applied 반환. 성공 전 예상 가능한 검증을 전부 수행한다.
+     * 동기적으로 실제 적용하고 Applied 반환. 성공 전 예상 가능한 검증을 전부 수행한다.
      * LIFE: port.tryAddLife() 한 번, true면 ok(null), false면 failed(EFFECT_REJECTED).
      * SHIELD: durationMillis/charges를 보관. RAPID_FIRE/BULLET_SPEED: magnitude와 스테이지 수명.
      * FREEZE: durationMillis 동안 이동 차단 상태. 모두 원래 기체 능력치를 직접 변경하지 않는다.
@@ -117,14 +117,14 @@ class ItemEffectSystem {
         return new Modifiers(fireRate, bulletSpeed, movementBlocked);
     }
 
-    /** TODO: 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
+    /** 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
     List<EffectView> snapshot() {
         List<EffectView> views = new ArrayList<EffectView>(running.size());
         for (RunningEffect effect : running.values()) views.add(effect.view());
         return Collections.unmodifiableList(views);
     }
 
-    /** TODO: 실행 효과 전부 제거, 각각 Ended(LEVEL_ENDED) 반환. ID는 보존한다. */
+    /** 실행 효과 전부 제거, 각각 Ended(LEVEL_ENDED) 반환. ID는 보존한다. */
     List<Ended> clear() {
         List<Ended> ended = new ArrayList<Ended>(running.size());
         for (RunningEffect effect : running.values())

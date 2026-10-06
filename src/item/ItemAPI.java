@@ -13,7 +13,7 @@ import java.util.Set;
  * 상점·입력·전투·HUD의 일반 아이템 기능 창구. 공개 자료형도 이 파일의 static 중첩 타입이다.
  * 게임 루프의 시작·갱신·종료는 ItemManager가 제공한다.
  * 한 판의 동일한 매니저를 공유하며, 같은 게임 상태 소유 스레드에서만 호출한다.
- * 콜백의 재진입은 금지한다. 남은 협력 클래스의 구현 전에는 전체 기능을 실행할 수 없다.
+ * 콜백의 재진입은 금지한다.
  */
 public final class ItemAPI {
     private final ItemManager manager;
