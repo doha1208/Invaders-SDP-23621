@@ -16,7 +16,6 @@ import item.ItemAPI.*;
  * 같은 게임 상태 소유 스레드에서만 호출하며 콜백의 재진입은 금지한다.
  * 드랍/인벤토리/효과의 원본 상태는 각각 담당 파일이 소유한다.
  * 이 파일은 단계, 현재 연결, 외부 지급 결과, 예약, 사후 이벤트만 소유한다.
- * 남은 협력 클래스의 STUB을 구현하기 전에는 전체 기능을 실행할 수 없다.
  */
 public final class ItemManager {
     private final ItemDefinitions definitions;
