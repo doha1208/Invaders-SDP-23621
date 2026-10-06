@@ -113,6 +113,8 @@ public class GameScreen extends Screen {
 	private int pendingDiamonds;
 	/** Item system of this run (Team CS). Kept across levels by ItemSystem. */
 	private ItemSystem items;
+	/** Item slot keys (1-9) held last frame, so holding a key uses it once. */
+	private boolean[] itemSlotKeysHeld = new boolean[9];
 
 	/**
 	 * Constructor, establishes the properties of the screen.
@@ -232,6 +234,7 @@ public class GameScreen extends Screen {
 				if (inputManager.isKeyDown(KeyEvent.VK_SPACE))
 					if (this.ship.shoot(this.bullets))
 						this.bulletsShot++;
+				useItemSlots(); // Item System (Team CS)
 			}
 
 			if (this.enemyShipSpecial != null) {
@@ -321,6 +324,7 @@ public class GameScreen extends Screen {
 		drawManager.drawCoinBalance(this, CurrencyManager.getInstance()
 				.getCoins());
 		drawManager.drawHorizontalLine(this, SEPARATION_LINE_HEIGHT - 1);
+		drawManager.drawItemHud(this, this.items); // Item System (Team CS)
 		// Low-health glitch (covers game + HUD). AUTHORED BY: VFX TEAM (Effection)
 		this.glitch.setEnabled(this.lives > 0
 				&& this.lives <= LOW_HEALTH_LIVES && !this.levelFinished);
@@ -479,6 +483,21 @@ public class GameScreen extends Screen {
 				+ CurrencyManager.getInstance().getCoins());
 		CoinPool.recycle(this.coins);
 		this.coins.clear();
+	}
+
+	/**
+	 * Uses an item slot when its number key is pressed (Team CS). Key 1 is
+	 * the first slot; holding a key uses the slot only once.
+	 */
+	private void useItemSlots() {
+		int slots = Math.min(this.itemSlotKeysHeld.length,
+				this.items.api().getView().slots.size());
+		for (int slot = 0; slot < slots; slot++) {
+			boolean down = inputManager.isKeyDown(KeyEvent.VK_1 + slot);
+			if (down && !this.itemSlotKeysHeld[slot])
+				this.items.useSlot(slot);
+			this.itemSlotKeysHeld[slot] = down;
+		}
 	}
 
 	/**

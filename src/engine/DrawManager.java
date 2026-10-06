@@ -17,6 +17,7 @@ import screen.Screen;
 import entity.Coin;
 import entity.Entity;
 import entity.Ship;
+import item.ItemAPI;
 import item.ItemSystem;
 
 /**
@@ -280,6 +281,72 @@ public final class DrawManager {
 	public void drawItemDrops(final ItemSystem items) {
 		backBufferGraphics.setFont(fontRegular);
 		items.drawDrops(backBufferGraphics);
+	}
+
+	/**
+	 * Draws the item slots and running effects on the free line below the
+	 * player ship (Team CS - Item System). Slots are on the left with the
+	 * key that uses them; effects are on the right with stacks or seconds.
+	 *
+	 * @param screen
+	 *            Screen to draw on.
+	 * @param items
+	 *            Item system of the current run.
+	 */
+	public void drawItemHud(final Screen screen, final ItemSystem items) {
+		ItemAPI.View view = items.api().getView();
+		int baseline = screen.getHeight() - 3;
+		backBufferGraphics.setFont(fontRegular);
+
+		StringBuilder slots = new StringBuilder();
+		for (int i = 0; i < view.slots.size(); i++) {
+			ItemAPI.ItemInfo item = view.slots.get(i);
+			if (i > 0)
+				slots.append(' ');
+			slots.append(i + 1).append(':')
+					.append(item == null ? "-" : item.displayName);
+		}
+		backBufferGraphics.setColor(Color.WHITE);
+		backBufferGraphics.drawString(slots.toString(), 5, baseline);
+
+		StringBuilder effects = new StringBuilder();
+		for (ItemAPI.EffectView effect : view.effects) {
+			if (effects.length() > 0)
+				effects.append(' ');
+			effects.append(shortItemName(effect.item.effectKind));
+			if (effect.stacks != null)
+				effects.append(" x").append(effect.stacks);
+			else if (effect.remainingMillis != null)
+				effects.append(' ')
+						.append((effect.remainingMillis + 999) / 1000)
+						.append('s');
+		}
+		backBufferGraphics.setColor(Color.YELLOW);
+		backBufferGraphics.drawString(effects.toString(), screen.getWidth()
+				- 5 - fontRegularMetrics.stringWidth(effects.toString()),
+				baseline);
+	}
+
+	/**
+	 * Short label for a running item effect in the HUD.
+	 *
+	 * @param kind
+	 *            Effect kind.
+	 * @return Two-letter label.
+	 */
+	private static String shortItemName(final ItemAPI.EffectKind kind) {
+		switch (kind) {
+		case RAPID_FIRE:
+			return "RF";
+		case BULLET_SPEED:
+			return "BS";
+		case SHIELD:
+			return "SH";
+		case FREEZE:
+			return "FZ";
+		default:
+			return kind.name();
+		}
 	}
 
 	/**
