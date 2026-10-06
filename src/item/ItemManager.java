@@ -251,6 +251,8 @@ public final class ItemManager {
             && item.durationKind == DurationKind.UNTIL_LEVEL_END
             && (item.effectKind == EffectKind.RAPID_FIRE || item.effectKind == EffectKind.BULLET_SPEED);
     }
+    /** 레벨 진행 중 여부. 게임 연결 창구(ItemSystem)가 중복 시작/종료를 피하는 데 쓴다. */
+    boolean isLevelActive() { return active; }
     private void requireActive() { if (!active) throw new IllegalStateException("level is inactive"); }
     private String levelId() { return active ? rules.levelId : null; }
     private static Long effectId(EffectView effect) { return effect == null ? null : effect.effectId; }
