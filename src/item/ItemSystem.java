@@ -103,14 +103,25 @@ public final class ItemSystem {
     /** 보관함 칸의 아이템 사용. */
     public UseResult useSlot(int slot) { return api.useSlot(slot); }
 
-    /** 기본 발사 간격(ms)에 연사 효과를 반영한 값. */
+    /** 아이템 연사 보너스: 초당 추가 발사 횟수. 기본 공속과 별개로 더해진다. */
+    public double fireRateBonus() { return api.getModifiers().fireRateBonus; }
+
+    /** 아이템 탄속 보너스: 프레임당 추가 픽셀. 기본 탄속과 별개로 더해진다. */
+    public double bulletSpeedBonus() { return api.getModifiers().bulletSpeedBonus; }
+
+    /**
+     * (기본 공속)+(아이템 공속)의 발사 간격(ms). 기본 간격은 바꾸지 않고 초당 발사 횟수에 보너스를 더한다.
+     * 예: 기본 750ms(초당 1.33발) + 보너스 0.5 → 초당 1.83발 → 545ms.
+     */
     public int fireInterval(int baseMillis) {
-        return Math.max(1, (int) Math.round(baseMillis / api.getModifiers().fireRateMultiplier));
+        double shotsPerSecond = 1000.0 / baseMillis + fireRateBonus();
+        return Math.max(1, (int) Math.round(1000.0 / shotsPerSecond));
     }
 
-    /** 기본 탄속(프레임당 픽셀, 부호 유지)에 탄속 효과를 반영한 값. int라 반올림된다. */
+    /** (기본 탄속)+(아이템 탄속). 방향(부호)은 유지한다. Bullet 속도가 int라 반올림된다. */
     public int bulletSpeed(int baseSpeed) {
-        return (int) Math.round(baseSpeed * api.getModifiers().bulletSpeedMultiplier);
+        double speed = Math.abs(baseSpeed) + bulletSpeedBonus();
+        return (int) Math.round(baseSpeed < 0 ? -speed : speed);
     }
 
     /** true면 적이 움직이지 않아야 한다 (프리즈). */
@@ -152,9 +163,12 @@ public final class ItemSystem {
 
     private Map<DropSource, DropRule> dropRules() {
         Map<String, Double> weights = balance.dropWeights;
+        Map<String, Double> decay = new java.util.LinkedHashMap<String, Double>();
+        decay.put("rapid_fire", balance.rapidFireDropDecay);
+        decay.put("bullet_speed", balance.bulletSpeedDropDecay);
         Map<DropSource, DropRule> rules = new EnumMap<DropSource, DropRule>(DropSource.class);
-        rules.put(DropSource.REGULAR_ENEMY, new DropRule(balance.regularDropProbability, weights));
-        rules.put(DropSource.SPECIAL_ENEMY, new DropRule(balance.specialDropProbability, weights));
+        rules.put(DropSource.REGULAR_ENEMY, new DropRule(balance.regularDropProbability, weights, decay));
+        rules.put(DropSource.SPECIAL_ENEMY, new DropRule(balance.specialDropProbability, weights, decay));
         return rules;
     }
 

@@ -2,15 +2,18 @@ package item;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import item.ItemAPI.*;
 
 /**
  * 모든 효과를 한 파일에서 관리한다. 효과별 소스 파일/상속 프레임워크는 만들지 않는다.
  * 내부 RunningEffect에 effectId/ItemInfo/잔여 시간/횟수 등을 보관한다. kind별 최대 한 실행 효과.
- * 기본은 빈 상태, clear 이후도 빈 상태. effectId는 한 판 내 재사용하지 않는다.
+ * 기본은 빈 상태. clear는 스테이지 효과만 지우고 판 단위 중첩 효과(UNTIL_RUN_END)는 남긴다.
+ * effectId는 한 판 내 재사용하지 않는다. 중첩 효과는 다시 얻으면 같은 effectId의 중첩 수만 늘어난다.
  * 이벤트 ID/큐는 매니저 소유. 여기서는 적용/종료/방어 결과만 반환한다.
  */
 class ItemEffectSystem {
@@ -31,13 +34,16 @@ class ItemEffectSystem {
         ItemAPI.required(item, "item");
         if (item.effectKind == EffectKind.LIFE)
             return ItemAPI.required(port, "port").canAddLife() ? null : GrantFailure.EFFECT_REJECTED;
-        return findByKind(item.effectKind) != null ? GrantFailure.EFFECT_ALREADY_ACTIVE : null;
+        RunningEffect existing = findByKind(item.effectKind);
+        if (existing == null) return null;
+        if (existing.stackable()) return existing.stacks < item.maxStacks ? null : GrantFailure.EFFECT_REJECTED;
+        return GrantFailure.EFFECT_ALREADY_ACTIVE;
     }
 
     /**
      * 동기적으로 실제 적용하고 Applied 반환. 성공 전 예상 가능한 검증을 전부 수행한다.
      * LIFE: port.tryAddLife() 한 번, true면 ok(null), false면 failed(EFFECT_REJECTED).
-     * SHIELD: durationMillis/charges를 보관. RAPID_FIRE/BULLET_SPEED: magnitude와 스테이지 수명.
+     * SHIELD: durationMillis/charges를 보관. RAPID_FIRE/BULLET_SPEED: 판 단위 중첩(최대 maxStacks).
      * FREEZE: durationMillis 동안 이동 차단 상태. 모두 원래 기체 능력치를 직접 변경하지 않는다.
      * 지속 효과 성공은 새 effectId의 EffectView를 반환하며 그 전에 원본 등록이 끝나 있어야 한다.
      * 거절은 원본 변경/시간 갱신/ID 소비 없음. MANUAL 분류여도 useSlot에서 이 메서드로 발동 가능.
@@ -50,7 +56,13 @@ class ItemEffectSystem {
             return port.tryAddLife() ? Applied.ok(null) : Applied.failed(GrantFailure.EFFECT_REJECTED);
         }
         validateDefinition(item); // 카탈로그 오류는 거절이 아니라 예외로 드러낸다.
-        if (findByKind(item.effectKind) != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
+        RunningEffect existing = findByKind(item.effectKind);
+        if (existing != null && existing.stackable()) {
+            if (existing.stacks >= item.maxStacks) return Applied.failed(GrantFailure.EFFECT_REJECTED);
+            existing.stacks++;
+            return Applied.ok(existing.view());
+        }
+        if (existing != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
 
         RunningEffect effect = new RunningEffect(nextEffectId++, item);
         running.put(effect.effectId, effect); // 원본 등록을 끝낸 뒤 View를 반환한다.
@@ -94,27 +106,38 @@ class ItemEffectSystem {
         return new Hit(before, exhausted);
     }
 
-    /** 항상 1/1/false부터 현재 효과를 계산한다. 같은 kind는 최대 하나만 존재한다. */
+    /**
+     * 항상 0/0/false부터 현재 효과를 계산한다. 같은 kind는 최대 하나만 존재한다.
+     * 중첩 효과 보너스 = magnitude * log2(1 + 중첩 수): 1회 1배, 2회 약 1.58배, 3회 2배, 7회 3배.
+     */
     Modifiers modifiers() {
-        double fireRate = 1.0;
-        double bulletSpeed = 1.0;
+        double fireRate = 0.0;
+        double bulletSpeed = 0.0;
         boolean movementBlocked = false;
         for (RunningEffect effect : running.values()) {
             switch (effect.item.effectKind) {
                 case RAPID_FIRE:
-                    fireRate = effect.item.magnitude;
+                    fireRate = stackedBonus(effect);
                     break;
                 case BULLET_SPEED:
-                    bulletSpeed = effect.item.magnitude;
+                    bulletSpeed = stackedBonus(effect);
                     break;
                 case FREEZE:
                     movementBlocked = true;
                     break;
                 default:
-                    break; // 방패는 방어 횟수로 처리하며 능력치 배율에는 영향을 주지 않는다.
+                    break; // 방패는 방어 횟수로 처리하며 능력치에는 영향을 주지 않는다.
             }
         }
         return new Modifiers(fireRate, bulletSpeed, movementBlocked);
+    }
+
+    /** itemId → 현재 중첩 수. 드랍 확률 감소 계산에 쓴다. */
+    Map<String, Integer> stacksByItemId() {
+        Map<String, Integer> stacks = new HashMap<String, Integer>();
+        for (RunningEffect effect : running.values())
+            if (effect.stackable()) stacks.put(effect.item.itemId, effect.stacks);
+        return stacks;
     }
 
     /** 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
@@ -124,13 +147,21 @@ class ItemEffectSystem {
         return Collections.unmodifiableList(views);
     }
 
-    /** 실행 효과 전부 제거, 각각 Ended(LEVEL_ENDED) 반환. ID는 보존한다. */
+    /** 스테이지 효과를 제거하고 각각 Ended(LEVEL_ENDED) 반환. 판 단위 중첩 효과와 ID는 보존한다. */
     List<Ended> clear() {
         List<Ended> ended = new ArrayList<Ended>(running.size());
-        for (RunningEffect effect : running.values())
+        Iterator<RunningEffect> iterator = running.values().iterator();
+        while (iterator.hasNext()) {
+            RunningEffect effect = iterator.next();
+            if (effect.stackable()) continue;
             ended.add(new Ended(effect.item.itemId, effect.effectId, EffectEndReason.LEVEL_ENDED));
-        running.clear(); // nextEffectId는 보존한다.
+            iterator.remove();
+        }
         return Collections.unmodifiableList(ended);
+    }
+
+    private static double stackedBonus(RunningEffect effect) {
+        return effect.item.magnitude * Math.log(1 + effect.stacks) / Math.log(2);
     }
 
     private RunningEffect findByKind(EffectKind kind) {
@@ -149,7 +180,7 @@ class ItemEffectSystem {
                 break;
             case RAPID_FIRE:
             case BULLET_SPEED:
-                expect(item, DurationKind.UNTIL_LEVEL_END, item.magnitude != null);
+                expect(item, DurationKind.UNTIL_RUN_END, item.magnitude != null && item.maxStacks != null);
                 break;
             default:
                 throw new IllegalStateException("unsupported effect kind: " + item.effectKind);
@@ -164,19 +195,24 @@ class ItemEffectSystem {
     private static final class RunningEffect {
         final long effectId;
         final ItemInfo item;
-        /** TIMED 잔여 시간. UNTIL_LEVEL_END는 0을 저장하며 시간으로 만료시키지 않는다. */
+        /** TIMED 잔여 시간. 그 외는 0을 저장하며 시간으로 만료시키지 않는다. */
         long remainingMillis;
         /** SHIELD 잔여 방어 횟수. 그 외 null. tryBlockHit이 감소시킨다. */
         Integer remainingCharges;
+        /** 중첩 효과(UNTIL_RUN_END)의 중첩 수. 그 외 0. */
+        int stacks;
 
         RunningEffect(long effectId, ItemInfo item) {
             this.effectId = effectId; this.item = item;
             remainingMillis = item.durationKind == DurationKind.TIMED ? item.durationMillis : 0;
             remainingCharges = item.effectKind == EffectKind.SHIELD ? item.charges : null;
+            stacks = stackable() ? 1 : 0;
         }
         boolean timed() { return item.durationKind == DurationKind.TIMED; }
+        boolean stackable() { return item.durationKind == DurationKind.UNTIL_RUN_END; }
         EffectView view() {
-            return new EffectView(effectId, item, timed() ? Long.valueOf(remainingMillis) : null, remainingCharges);
+            return new EffectView(effectId, item, timed() ? Long.valueOf(remainingMillis) : null,
+                remainingCharges, stackable() ? Integer.valueOf(stacks) : null);
         }
     }
 
