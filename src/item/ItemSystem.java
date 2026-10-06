@@ -109,21 +109,6 @@ public final class ItemSystem {
     /** Item bullet speed bonus: extra pixels per frame, added on top of the base bullet speed. */
     public double bulletSpeedBonus() { return api.getModifiers().bulletSpeedBonus; }
 
-    /**
-     * Shot interval (ms) for (base fire rate) + (item fire rate). The base interval is kept; the bonus is added to shots per second.
-     * e.g. base 750ms (1.33 shots/s) + bonus 0.5 → 1.83 shots/s → 545ms.
-     */
-    public int fireInterval(int baseMillis) {
-        double shotsPerSecond = 1000.0 / baseMillis + fireRateBonus();
-        return Math.max(1, (int) Math.round(1000.0 / shotsPerSecond));
-    }
-
-    /** (base bullet speed) + (item bullet speed). Keeps the direction (sign). Rounded because Bullet speed is an int. */
-    public int bulletSpeed(int baseSpeed) {
-        double speed = Math.abs(baseSpeed) + bulletSpeedBonus();
-        return (int) Math.round(baseSpeed < 0 ? -speed : speed);
-    }
-
     /** true means enemies must not move (freeze). */
     public boolean enemiesFrozen() { return api.getModifiers().enemyMovementBlocked; }
 
