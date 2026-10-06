@@ -13,10 +13,10 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * 아이템 밸런스 수치. res/item-balance.properties에서 읽으며 컴파일 없이 조정한다.
- * 파일 위치: -Dinvaders.itemBalance=<경로> > res/item-balance.properties > 클래스패스 item-balance.properties.
- * 파일이나 키가 없으면 기본값(기획 초기값)을 쓴다. 값이 잘못되면 조용히 보정하지 않고 예외를 던진다.
- * 한 번 읽은 객체는 불변이다. 새 판을 시작할 때 다시 읽는다.
+ * Item balance values. Read from res/item-balance.properties so they can be tuned without recompiling.
+ * File lookup order: -Dinvaders.itemBalance=<path> > res/item-balance.properties > item-balance.properties on the classpath.
+ * A missing file or key uses the default (initial design value). An invalid value throws instead of being silently corrected.
+ * A loaded instance is immutable. Values are read again when a new run starts.
  */
 final class ItemBalance {
     static final String PATH_PROPERTY = "invaders.itemBalance";
@@ -24,7 +24,7 @@ final class ItemBalance {
 
     final long shieldDurationMillis;
     final int shieldCharges;
-    /** 첫 획득 보너스(연사: 초당 추가 발사, 탄속: 프레임당 추가 픽셀), 최대 중첩, 중첩당 드랍 가중치 배율. */
+    /** First-pickup bonus (rapid fire: extra shots per second, bullet speed: extra pixels per frame), max stacks, drop weight multiplier per stack. */
     final double rapidFireBonus, bulletSpeedBonus;
     final int rapidFireMaxStacks, bulletSpeedMaxStacks;
     final double rapidFireDropDecay, bulletSpeedDropDecay;
@@ -33,17 +33,17 @@ final class ItemBalance {
     final int maxLives, lifeCapBonusScore;
 
     final double regularDropProbability, specialDropProbability;
-    /** itemId → 가중치. 등록 순서 유지. */
+    /** itemId → weight. Keeps registration order. */
     final Map<String, Double> dropWeights;
     final double fallSpeed, dropWidth, dropHeight;
     final long groundLifetimeMillis;
 
     final int inventoryCapacity;
 
-    /** 기본값(기획 초기값). */
+    /** Default values (initial design values). */
     static ItemBalance defaults() { return new ItemBalance(new Properties()); }
 
-    /** 설정 파일을 찾아 읽는다. 지정한 경로가 없거나 읽을 수 없으면 예외. */
+    /** Finds and reads the config file. Throws if the given path is missing or unreadable. */
     static ItemBalance load() {
         Properties settings = new Properties();
         String configured = System.getProperty(PATH_PROPERTY);

@@ -10,25 +10,25 @@ import java.util.TreeMap;
 import item.ItemAPI.*;
 
 /**
- * 모든 효과를 한 파일에서 관리한다. 효과별 소스 파일/상속 프레임워크는 만들지 않는다.
- * 내부 RunningEffect에 effectId/ItemInfo/잔여 시간/횟수 등을 보관한다. kind별 최대 한 실행 효과.
- * 기본은 빈 상태. clear는 스테이지 효과만 지우고 판 단위 중첩 효과(UNTIL_RUN_END)는 남긴다.
- * effectId는 한 판 내 재사용하지 않는다. 중첩 효과는 다시 얻으면 같은 effectId의 중첩 수만 늘어난다.
- * 이벤트 ID/큐는 매니저 소유. 여기서는 적용/종료/방어 결과만 반환한다.
+ * Manages every effect in one file. No per-effect source files or inheritance framework.
+ * The inner RunningEffect holds effectId/ItemInfo/remaining time/charges, etc. At most one running effect per kind.
+ * Starts empty. clear removes only stage effects and keeps run-wide stacking effects (UNTIL_RUN_END).
+ * effectIds are never reused within a run. Picking up a stacking effect again only raises the stack count of the same effectId.
+ * Event IDs/queue belong to the manager. This class only returns apply/end/block results.
  */
 class ItemEffectSystem {
-    /** 실행 중인 지속 효과 원본. effectId 오름차순으로 순회된다. kind별 최대 1개. */
+    /** Source of running effects, iterated in ascending effectId. At most one per kind. */
     private final TreeMap<Long, RunningEffect> running = new TreeMap<Long, RunningEffect>();
-    /** 한 판 내 재사용하지 않는다. clear 후에도 이어서 증가한다. */
+    /** Never reused within a run. Keeps increasing after clear. */
     private long nextEffectId = 1;
 
     ItemEffectSystem() { }
 
     /**
-     * 실제 적용 가능성의 읽기 전용 검사. 가능하면 null, 불가하면 실패 사유.
-     * LIFE는 port.canAddLife만 호출한다. 나머지는 같은 kind가 실행 중인지 확인한다.
-     * 정상 실패는 EFFECT_ALREADY_ACTIVE 또는 EFFECT_REJECTED만 반환한다.
-     * 포트는 필요한 LIFE에서만 접근하며 슬롯·효과·ID·난수·시간을 변경하지 않는다.
+     * Read-only check of whether the effect can be applied. null if possible, otherwise the failure reason.
+     * LIFE only calls port.canAddLife. Others check whether the same kind is running.
+     * Normal failures return only EFFECT_ALREADY_ACTIVE or EFFECT_REJECTED.
+     * The port is used only for LIFE; slots, effects, IDs, randomness and time are not changed.
      */
     GrantFailure check(ItemInfo item, LifePort port) {
         ItemAPI.required(item, "item");
@@ -41,13 +41,13 @@ class ItemEffectSystem {
     }
 
     /**
-     * 동기적으로 실제 적용하고 Applied 반환. 성공 전 예상 가능한 검증을 전부 수행한다.
-     * LIFE: port.tryAddLife() 한 번, true면 ok(null), false면 failed(EFFECT_REJECTED).
-     * SHIELD: durationMillis/charges를 보관. RAPID_FIRE/BULLET_SPEED: 판 단위 중첩(최대 maxStacks).
-     * FREEZE: durationMillis 동안 이동 차단 상태. 모두 원래 기체 능력치를 직접 변경하지 않는다.
-     * 지속 효과 성공은 새 effectId의 EffectView를 반환하며 그 전에 원본 등록이 끝나 있어야 한다.
-     * 거절은 원본 변경/시간 갱신/ID 소비 없음. MANUAL 분류여도 useSlot에서 이 메서드로 발동 가능.
-     * 입력/카탈로그/코딩 오류는 정상 거절로 숨기지 않는다. 포트/다른 콜백으로 매니저에 재진입 금지.
+     * Applies synchronously and returns Applied. All foreseeable checks run before success.
+     * LIFE: calls port.tryAddLife() once; true → ok(null), false → failed(EFFECT_REJECTED).
+     * SHIELD: keeps durationMillis/charges. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks).
+     * FREEZE: blocks movement for durationMillis. None of them change the ship's base stats directly.
+     * A successful lasting effect returns an EffectView with a new effectId, registered before returning.
+     * A rejection changes nothing, refreshes no time and consumes no ID. MANUAL items can also be triggered here via useSlot.
+     * Input/catalog/coding errors are not hidden as normal rejections. No re-entering the manager via the port or other callbacks.
      */
     Applied apply(ItemInfo item, LifePort port) {
         ItemAPI.required(item, "item");
@@ -55,7 +55,7 @@ class ItemEffectSystem {
             ItemAPI.required(port, "port");
             return port.tryAddLife() ? Applied.ok(null) : Applied.failed(GrantFailure.EFFECT_REJECTED);
         }
-        validateDefinition(item); // 카탈로그 오류는 거절이 아니라 예외로 드러낸다.
+        validateDefinition(item); // Catalog errors surface as exceptions, not rejections.
         RunningEffect existing = findByKind(item.effectKind);
         if (existing != null && existing.stackable()) {
             if (existing.stacks >= item.maxStacks) return Applied.failed(GrantFailure.EFFECT_REJECTED);
@@ -65,14 +65,14 @@ class ItemEffectSystem {
         if (existing != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
 
         RunningEffect effect = new RunningEffect(nextEffectId++, item);
-        running.put(effect.effectId, effect); // 원본 등록을 끝낸 뒤 View를 반환한다.
+        running.put(effect.effectId, effect); // Returns the View only after registering the source.
         return Applied.ok(effect.view());
     }
 
     /**
-     * 기존 효과의 시간만 delta만큼 감소. 만료되면 제거 후 Ended(EXPIRED) 반환.
-     * 스테이지 지속 효과는 시간으로 만료시키지 않는다. id순서로 종료를 보고한다.
-     * 이번 update에서 나중에 새로 적용되는 효과에는 지난 delta를 소급 적용하지 않는다.
+     * Reduces only existing effects' time by delta. Expired ones are removed and returned as Ended(EXPIRED).
+     * Stage-long effects never expire by time. Endings are reported in id order.
+     * Effects applied later in this update do not get the past delta applied retroactively.
      */
     List<Ended> advance(long delta) {
         if (delta < 0) throw new IllegalArgumentException("negative delta");
@@ -92,10 +92,10 @@ class ItemEffectSystem {
     }
 
     /**
-     * 유효한 방패가 없으면 null. 있으면 차감 전 불변 View를 보관하고 방어 횟수 감소.
-     * 마지막 횟수면 원본 효과도 제거하고 Hit(before,true), 아니면 Hit(before,false).
-     * 판정과 소비를 한 호출에서 완료한다. 매니저가 SHIELD_BLOCKED/필요한 종료 사건을 기록한다.
-     * advance와 clear에서 이미 제거된 방패를 다시 종료 보고하지 않는다.
+     * null if there is no valid shield. Otherwise keeps an immutable View from before the hit and lowers the charges.
+     * On the last charge the effect is removed and Hit(before,true) is returned, otherwise Hit(before,false).
+     * Check and consume happen in one call. The manager records SHIELD_BLOCKED and any end event.
+     * advance and clear never report an already removed shield again.
      */
     Hit tryBlockHit() {
         RunningEffect shield = findByKind(EffectKind.SHIELD);
@@ -107,8 +107,8 @@ class ItemEffectSystem {
     }
 
     /**
-     * 항상 0/0/false부터 현재 효과를 계산한다. 같은 kind는 최대 하나만 존재한다.
-     * 중첩 효과 보너스 = magnitude * log2(1 + 중첩 수): 1회 1배, 2회 약 1.58배, 3회 2배, 7회 3배.
+     * Always computes current effects starting from 0/0/false. At most one effect per kind exists.
+     * Stacking bonus = magnitude * log2(1 + stacks): 1 stack 1x, 2 about 1.58x, 3 2x, 7 3x.
      */
     Modifiers modifiers() {
         double fireRate = 0.0;
@@ -126,13 +126,13 @@ class ItemEffectSystem {
                     movementBlocked = true;
                     break;
                 default:
-                    break; // 방패는 방어 횟수로 처리하며 능력치에는 영향을 주지 않는다.
+                    break; // The shield works by charges and does not affect stats.
             }
         }
         return new Modifiers(fireRate, bulletSpeed, movementBlocked);
     }
 
-    /** itemId → 현재 중첩 수. 드랍 확률 감소 계산에 쓴다. */
+    /** itemId → current stack count. Used to lower drop chances. */
     Map<String, Integer> stacksByItemId() {
         Map<String, Integer> stacks = new HashMap<String, Integer>();
         for (RunningEffect effect : running.values())
@@ -140,14 +140,14 @@ class ItemEffectSystem {
         return stacks;
     }
 
-    /** 실행 중인 지속 효과만 id순서 불변 목록. LIFE/종료된 효과는 포함하지 않는다. */
+    /** Immutable list of running lasting effects in id order. Excludes LIFE and ended effects. */
     List<EffectView> snapshot() {
         List<EffectView> views = new ArrayList<EffectView>(running.size());
         for (RunningEffect effect : running.values()) views.add(effect.view());
         return Collections.unmodifiableList(views);
     }
 
-    /** 스테이지 효과를 제거하고 각각 Ended(LEVEL_ENDED) 반환. 판 단위 중첩 효과와 ID는 보존한다. */
+    /** Removes stage effects and returns Ended(LEVEL_ENDED) for each. Run-wide stacking effects and IDs are kept. */
     List<Ended> clear() {
         List<Ended> ended = new ArrayList<Ended>(running.size());
         Iterator<RunningEffect> iterator = running.values().iterator();
@@ -169,7 +169,7 @@ class ItemEffectSystem {
         return null;
     }
 
-    /** ItemDefinitions.validate와 같은 kind/duration/수치 조합 규칙. LIFE는 호출하지 않는다. */
+    /** Same kind/duration/value rules as ItemDefinitions.validate. Not called for LIFE. */
     private static void validateDefinition(ItemInfo item) {
         switch (item.effectKind) {
             case SHIELD:
@@ -191,15 +191,15 @@ class ItemEffectSystem {
             throw new IllegalStateException("invalid effect definition: " + item.itemId);
     }
 
-    /** 내부 가변 원본. 외부에는 view()의 불변 EffectView만 내보낸다. */
+    /** Internal mutable source. Only the immutable EffectView from view() is exposed. */
     private static final class RunningEffect {
         final long effectId;
         final ItemInfo item;
-        /** TIMED 잔여 시간. 그 외는 0을 저장하며 시간으로 만료시키지 않는다. */
+        /** Remaining time for TIMED. Others store 0 and never expire by time. */
         long remainingMillis;
-        /** SHIELD 잔여 방어 횟수. 그 외 null. tryBlockHit이 감소시킨다. */
+        /** Remaining SHIELD charges. null otherwise. Lowered by tryBlockHit. */
         Integer remainingCharges;
-        /** 중첩 효과(UNTIL_RUN_END)의 중첩 수. 그 외 0. */
+        /** Stack count of a stacking (UNTIL_RUN_END) effect. 0 otherwise. */
         int stacks;
 
         RunningEffect(long effectId, ItemInfo item) {
