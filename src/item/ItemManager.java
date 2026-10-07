@@ -107,6 +107,8 @@ public final class ItemManager {
         ItemInfo item = definitions.find(request.itemId);
         if (item == null) return GrantFailure.UNKNOWN_ITEM;
         if (!item.supportedGrantTimings.contains(request.timing)) return GrantFailure.TIMING_NOT_SUPPORTED;
+        // Equipped items are bought and equipped through ItemSystem, never granted into a run.
+        if (item.activationMode == ActivationMode.EQUIPPED) return GrantFailure.TIMING_NOT_SUPPORTED;
         if (request.timing == GrantTiming.NEXT_LEVEL) {
             if (!supportsNextLevel(item)) return GrantFailure.TIMING_NOT_SUPPORTED;
             if (active) return GrantFailure.INVALID_PHASE;

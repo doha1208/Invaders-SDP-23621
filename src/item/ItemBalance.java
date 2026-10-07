@@ -43,6 +43,9 @@ final class ItemBalance {
 
     final int inventoryCapacity;
 
+    /** Equipped items: extra slots, and the magnet score for a drop it cannot keep. */
+    final int extraSlotsAmount, magnetConvertScore;
+
     /** Default values (initial design values). */
     static ItemBalance defaults() { return new ItemBalance(new Properties()); }
 
@@ -105,6 +108,9 @@ final class ItemBalance {
         groundLifetimeMillis = positiveLong(settings, "drop.groundLifetimeMillis", 8_000L);
 
         inventoryCapacity = positiveInt(settings, "inventory.capacity", 3);
+
+        extraSlotsAmount = positiveInt(settings, "equip.extraSlots.amount", 1);
+        magnetConvertScore = positiveInt(settings, "equip.magnet.convertScore", 100);
     }
 
     private static String raw(Properties settings, String key) {

@@ -43,10 +43,19 @@ public final class ItemAPI {
         boolean tryAddLife();
     }
 
-    public enum ActivationMode { ON_PICKUP, MANUAL }
-    public enum EffectKind { LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE, BOOST, SCORE_BOOST }
-    /** UNTIL_RUN_END: lasts for the whole run and stacks when picked up again (rapid fire, bullet speed). */
-    public enum DurationKind { INSTANT, TIMED, UNTIL_LEVEL_END, UNTIL_RUN_END }
+    /**
+     * ON_PICKUP: works when picked up (passive). MANUAL: stored in a slot and used with a key (active).
+     * EQUIPPED: owned and equipped outside a run (at most one); works for every run while equipped.
+     */
+    public enum ActivationMode { ON_PICKUP, MANUAL, EQUIPPED }
+    public enum EffectKind {
+        LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE, BOOST, SCORE_BOOST, EXTRA_SLOTS, MAGNET
+    }
+    /**
+     * UNTIL_RUN_END: lasts for the whole run and stacks when picked up again (rapid fire, bullet speed).
+     * WHILE_EQUIPPED: active for the whole run while the item is equipped.
+     */
+    public enum DurationKind { INSTANT, TIMED, UNTIL_LEVEL_END, UNTIL_RUN_END, WHILE_EQUIPPED }
     public enum DropSource { REGULAR_ENEMY, SPECIAL_ENEMY }
     public enum GrantSource { SHOP, REWARD }
     public enum GrantTiming { NOW, NEXT_LEVEL }
@@ -147,7 +156,10 @@ public final class ItemAPI {
         public final DurationKind durationKind;
         public final Long durationMillis;
         public final Integer charges;
-        /** First-pickup bonus for run-wide stacks, or the multiplier for BOOST/SCORE_BOOST. */
+        /**
+         * First-pickup bonus for run-wide stacks, or the multiplier for BOOST/SCORE_BOOST.
+         * Equipped items: EXTRA_SLOTS = extra inventory slots, MAGNET = score for a drop it cannot keep.
+         */
         public final Double magnitude;
         /** Max stacks of a stacking effect. null otherwise. */
         public final Integer maxStacks;

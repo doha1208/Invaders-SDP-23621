@@ -127,6 +127,39 @@ class ItemDefinitions {
         );
         definitions.put(scoreBoost.itemId, scoreBoost);
 
+        ItemInfo extraSlots = new ItemInfo(
+            "extra_slots",
+            "Extra Slots",
+            "Equip: +" + balance.extraSlotsAmount + " inventory slot(s) in every run.",
+            "extra_slots",
+            ActivationMode.EQUIPPED,
+            EffectKind.EXTRA_SLOTS,
+            DurationKind.WHILE_EQUIPPED,
+            null,
+            null,
+            (double) balance.extraSlotsAmount,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(extraSlots.itemId, extraSlots);
+
+        ItemInfo magnet = new ItemInfo(
+            "magnet",
+            "Magnet",
+            "Equip: picks up items as soon as they land. A drop it cannot keep gives "
+                + balance.magnetConvertScore + " points instead.",
+            "magnet",
+            ActivationMode.EQUIPPED,
+            EffectKind.MAGNET,
+            DurationKind.WHILE_EQUIPPED,
+            null,
+            null,
+            (double) balance.magnetConvertScore,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(magnet.itemId, magnet);
+
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
         validateDefinitions();
@@ -136,7 +169,8 @@ class ItemDefinitions {
      * Looks up a registered ID. Returns null only for a valid but unknown ID. The list is immutable for a run.
      * Registered by default: life (instant, +1 life), shield (manual, time/charges), rapid_fire (on pickup, stacks for the run),
      * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time),
-     * boost (manual, temporary extra ship speed/fire rate), score_boost (manual, temporary extra earned score).
+     * boost (manual, temporary extra ship speed/fire rate), score_boost (manual, temporary extra earned score),
+     * extra_slots / magnet (owned and equipped outside a run, work in every run while equipped; never dropped).
      * The new active items are available to the shop but excluded from default enemy drop weights.
      * All support NOW. Only rapid_fire/bullet_speed support NEXT_LEVEL. Values come from ItemBalance (config file).
      */
@@ -167,6 +201,8 @@ class ItemDefinitions {
             for (Map.Entry<String, Double> entry : rule.weights.entrySet()) {
                 requireValid(itemsById.containsKey(entry.getKey()),
                     "unknown item ID: " + entry.getKey());
+                requireValid(itemsById.get(entry.getKey()).activationMode != ActivationMode.EQUIPPED,
+                    "equipped items are not dropped: " + entry.getKey());
                 double weight = entry.getValue();
                 ItemAPI.finite(weight, "weight");
                 requireValid(weight >= 0.0, "weight must not be negative: " + entry.getKey());
@@ -225,6 +261,10 @@ class ItemDefinitions {
                         && item.maxStacks == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
+                case EXTRA_SLOTS:
+                case MAGNET:
+                    requireDefinition(item, isEquipped(item));
+                    break;
                 default:
                     throw new IllegalArgumentException("unsupported effect kind: " + item.effectKind);
             }
@@ -240,6 +280,15 @@ class ItemDefinitions {
             && item.magnitude != null && item.maxStacks != null
             && item.supportedGrantTimings.equals(
                 EnumSet.of(GrantTiming.NOW, GrantTiming.NEXT_LEVEL));
+    }
+
+    /** Equipped items: EQUIPPED + WHILE_EQUIPPED, one value in magnitude, never dropped or stacked. */
+    private boolean isEquipped(ItemInfo item) {
+        return item.activationMode == ActivationMode.EQUIPPED
+            && item.durationKind == DurationKind.WHILE_EQUIPPED
+            && item.durationMillis == null && item.charges == null
+            && item.magnitude != null && item.maxStacks == null
+            && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW));
     }
 
     private static String seconds(long millis) {
