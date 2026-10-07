@@ -23,6 +23,7 @@ import entity.EnemyShip;
 import entity.EnemyShipFormation;
 import entity.Entity;
 import entity.Ship;
+import item.ItemSystem;
 
 /**
  * Implements the game screen, where the action happens.
@@ -109,6 +110,10 @@ public class GameScreen extends Screen {
 	/** Diamonds earned this run but not yet cashed out; lost on death,
 	 * banked into DiamondManager only when the player cashes out. */
 	private int pendingDiamonds;
+	/** Item system of this run (Team CS). Kept across levels by ItemSystem. */
+	private ItemSystem items;
+	/** Item slot keys (1-9) held last frame, so holding a key uses it once. */
+	private boolean[] itemSlotKeysHeld = new boolean[9];
 
 	/**
 	 * Constructor, establishes the properties of the screen.
@@ -167,6 +172,15 @@ public class GameScreen extends Screen {
 		this.achievementPopupQueue = new LinkedList<Achievement>();
 		this.coinDropManager = new CoinDropManager();
 
+		// Item System (Team CS): level 1 starts a new run, later levels keep it.
+		this.items = ItemSystem.forLevel(this.level);
+		this.items.beginLevel(this.level, this.width, this.ship,
+				new ItemSystem.GameHooks() {
+					public int getLives() { return lives; }
+					public void addLife() { lives++; }
+					public void addScore(final int points) { score += points; }
+				});
+
 		// Special input delay / countdown.
 		this.gameStartTime = System.currentTimeMillis();
 		this.inputDelay = Core.getCooldown(INPUT_DELAY);
@@ -180,6 +194,7 @@ public class GameScreen extends Screen {
 	 */
 	public final int run() {
 		super.run();
+		this.items.endLevel(); // Item System (Team CS)
 
 		this.score += LIFE_SCORE * (this.lives - 1);
 		this.logger.info("Screen cleared with a score of " + this.score);
@@ -192,6 +207,9 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
+		// Item System (Team CS): item bonuses on top of the base fire rate/bullet speed.
+		this.ship.setItemBonuses(this.items.fireRateBonus(),
+				this.items.bulletSpeedBonus());
 
 		if (this.inputDelay.checkFinished() && !this.levelFinished) {
 
@@ -215,11 +233,12 @@ public class GameScreen extends Screen {
 				if (inputManager.isKeyDown(KeyEvent.VK_SPACE))
 					if (this.ship.shoot(this.bullets))
 						this.bulletsShot++;
+				useItemSlots(); // Item System (Team CS)
 			}
 
 			if (this.enemyShipSpecial != null) {
 				if (!this.enemyShipSpecial.isDestroyed())
-					this.enemyShipSpecial.move(2, 0);
+					this.enemyShipSpecial.move(this.items.enemiesFrozen() ? 0 : 2, 0);
 				else if (this.enemyShipSpecialExplosionCooldown.checkFinished())
 					this.enemyShipSpecial = null;
 
@@ -237,13 +256,19 @@ public class GameScreen extends Screen {
 			}
 
 			this.ship.update();
-			this.enemyShipFormation.update();
+			if (!this.items.enemiesFrozen()) // Freeze item (Team CS)
+				this.enemyShipFormation.update();
 			this.enemyShipFormation.shoot(this.bullets);
 		}
 
+		// Item System (Team CS): drops fall/expire, pickups, effect timers.
+		this.items.update(this.ship, this.inputDelay.checkFinished()
+				&& !this.levelFinished && this.lives > 0
+				&& !this.ship.isDestroyed());
 		manageCollisions();
 		cleanBullets();
 		updateCoins();
+		handleItemEvents();
 		updateAchievementPopup();
 		draw();
 
@@ -274,6 +299,7 @@ public class GameScreen extends Screen {
 
 		drawManager.drawEntity(this.ship, this.ship.getPositionX(),
 				this.ship.getPositionY());
+		drawManager.drawItemShield(this.ship, this.items); // Item System (Team CS)
 		if (this.enemyShipSpecial != null)
 			drawManager.drawEntity(this.enemyShipSpecial,
 					this.enemyShipSpecial.getPositionX(),
@@ -290,6 +316,7 @@ public class GameScreen extends Screen {
 		for (Coin coin : this.coins)
 			drawManager.drawCoin(coin, coin.getPositionX(),
 					coin.getPositionY());
+		drawManager.drawItemDrops(this.items); // Item System (Team CS)
 
 		// Interface.
 		drawManager.drawScore(this, this.score);
@@ -297,6 +324,7 @@ public class GameScreen extends Screen {
 		drawManager.drawCoinBalance(this, CurrencyManager.getInstance()
 				.getCoins());
 		drawManager.drawHorizontalLine(this, SEPARATION_LINE_HEIGHT - 1);
+		drawManager.drawItemHud(this, this.items); // Item System (Team CS)
 		// Low-health glitch (covers game + HUD). AUTHORED BY: VFX TEAM (Effection)
 		this.glitch.setEnabled(this.lives > 0
 				&& this.lives <= LOW_HEALTH_LIVES && !this.levelFinished);
@@ -312,6 +340,7 @@ public class GameScreen extends Screen {
 					/ 12);
 			drawManager.drawHorizontalLine(this, this.height / 2 + this.height
 					/ 12);
+			drawManager.drawItemHint(this, this.items); // Item System (Team CS)
 		}
 
 		// Draw the notification after every gameplay and HUD element.
@@ -348,7 +377,8 @@ public class GameScreen extends Screen {
 			if (bullet.getSpeed() > 0) {
 				if (checkCollision(bullet, this.ship) && !this.levelFinished) {
 					recyclable.add(bullet);
-					if (!this.ship.isDestroyed()) {
+					if (!this.ship.isDestroyed()
+							&& !this.items.tryBlockHit()) { // Shield item (Team CS)
 						this.ship.destroy();
 						this.lives--;
 						this.damageDim.trigger(); // <-*AUTHORED BY: VFX TEAM (Effection)
@@ -364,6 +394,7 @@ public class GameScreen extends Screen {
 						this.shipsDestroyed++;
 						this.enemyShipFormation.destroy(enemyShip);
 						maybeDropCoin(enemyShip);
+						this.items.onEnemyDefeated(enemyShip, false);
 						showUnlockedAchievement(Core.getAchievementManager()
 								.recordEnemyDefeated());
 						recyclable.add(bullet);
@@ -375,6 +406,7 @@ public class GameScreen extends Screen {
 					this.shipsDestroyed++;
 					this.enemyShipSpecial.destroy();
 					dropCoin(this.enemyShipSpecial, BONUS_COIN_VALUE);
+					this.items.onEnemyDefeated(this.enemyShipSpecial, true);
 					showUnlockedAchievement(Core.getAchievementManager()
 							.recordEnemyDefeated());
 					this.enemyShipSpecialExplosionCooldown.reset();
@@ -452,6 +484,29 @@ public class GameScreen extends Screen {
 				+ CurrencyManager.getInstance().getCoins());
 		CoinPool.recycle(this.coins);
 		this.coins.clear();
+	}
+
+	/**
+	 * Uses an item slot when its number key is pressed (Team CS). Key 1 is
+	 * the first slot; holding a key uses the slot only once.
+	 */
+	private void useItemSlots() {
+		int slots = Math.min(this.itemSlotKeysHeld.length,
+				this.items.api().getView().slots.size());
+		for (int slot = 0; slot < slots; slot++) {
+			boolean down = inputManager.isKeyDown(KeyEvent.VK_1 + slot);
+			if (down && !this.itemSlotKeysHeld[slot])
+				this.items.useSlot(slot);
+			this.itemSlotKeysHeld[slot] = down;
+		}
+	}
+
+	/**
+	 * Takes this frame's item events (Team CS) so they don't pile up. The
+	 * item system logs them itself; sound and effects can hook in here.
+	 */
+	private void handleItemEvents() {
+		this.items.drainEvents();
 	}
 
 	/**
