@@ -14,6 +14,7 @@ import java.util.logging.Logger;
 
 import screen.MenuItem;
 import screen.Screen;
+import entity.Coin;
 import entity.Entity;
 import entity.Ship;
 
@@ -76,7 +77,9 @@ public final class DrawManager {
 		/** Bonus ship. */
 		EnemyShipSpecial,
 		/** Destroyed enemy ship. */
-		Explosion
+		Explosion,
+		/** First Flight achievement icon. */
+		FirstFlight
 	};
 
 	/**
@@ -102,6 +105,7 @@ public final class DrawManager {
 			spriteMap.put(SpriteType.EnemyShipC2, new boolean[12][8]);
 			spriteMap.put(SpriteType.EnemyShipSpecial, new boolean[16][7]);
 			spriteMap.put(SpriteType.Explosion, new boolean[13][7]);
+			spriteMap.put(SpriteType.FirstFlight, new boolean[11][8]);
 
 			fileManager.loadSprite(spriteMap);
 			logger.info("Finished loading the sprites.");
@@ -191,14 +195,157 @@ public final class DrawManager {
 	 */
 	public void drawEntity(final Entity entity, final int positionX,
 			final int positionY) {
-		boolean[][] image = spriteMap.get(entity.getSpriteType());
+		drawSprite(entity.getSpriteType(), positionX, positionY,
+				entity.getColor());
+	}
 
-		backBufferGraphics.setColor(entity.getColor());
+	/**
+	 * Draws a sprite using the game's standard two-pixel scale.
+	 *
+	 * @param spriteType Sprite to draw.
+	 * @param positionX Coordinates for the left side of the image.
+	 * @param positionY Coordinates for the upper side of the image.
+	 * @param color Color used for filled pixels.
+	 */
+	public void drawSprite(final SpriteType spriteType, final int positionX,
+			final int positionY, final Color color) {
+		boolean[][] image = spriteMap.get(spriteType);
+
+		backBufferGraphics.setColor(color);
 		for (int i = 0; i < image.length; i++)
 			for (int j = 0; j < image[i].length; j++)
 				if (image[i][j])
 					backBufferGraphics.drawRect(positionX + i * 2, positionY
 							+ j * 2, 1, 1);
+	}
+
+	/**
+	 * Draws regular text at an exact position, left aligned.
+	 *
+	 * @param string    Text to draw.
+	 * @param positionX Horizontal position of the left edge.
+	 * @param positionY Vertical position of the baseline.
+	 * @param color     Colour of the text.
+	 */
+	public void drawRegularString(final String string, final int positionX,
+			final int positionY, final Color color) {
+		backBufferGraphics.setFont(fontRegular);
+		backBufferGraphics.setColor(color);
+		backBufferGraphics.drawString(string, positionX, positionY);
+	}
+
+	/**
+	 * Draws an empty rectangle outline.
+	 *
+	 * @param positionX Horizontal position of the left edge.
+	 * @param positionY Vertical position of the top edge.
+	 * @param width     Width of the box.
+	 * @param height    Height of the box.
+	 * @param color     Colour of the outline.
+	 */
+	public void drawBox(final int positionX, final int positionY,
+			final int width, final int height, final Color color) {
+		backBufferGraphics.setColor(color);
+		backBufferGraphics.drawRect(positionX, positionY, width, height);
+	}
+	
+	/**
+	 * Draws a dropped coin as a filled circle (GoG - Currency System).
+	 * Coins have no entry in the shared sprite file, so they are drawn
+	 * here instead of through drawEntity().
+	 *
+	 * @param coin
+	 *            Coin to be drawn.
+	 * @param positionX
+	 *            Coordinates for the left side of the coin.
+	 * @param positionY
+	 *            Coordinates for the upper side of the coin.
+	 */
+	public void drawCoin(final Coin coin, final int positionX,
+			final int positionY) {
+		backBufferGraphics.setColor(coin.getColor());
+		backBufferGraphics.fillOval(positionX, positionY, coin.getWidth(),
+				coin.getHeight());
+	}
+
+	/**
+	 * Draws a coin balance as a small coin icon followed by the amount,
+	 * centered along the top bar of the screen (GoG - Currency System).
+	 * Used by the in-game HUD and the shop.
+	 *
+	 * @param screen
+	 *            Screen to draw on.
+	 * @param coins
+	 *            Coin balance to display.
+	 */
+	public void drawCoinBalance(final Screen screen, final int coins) {
+		drawCoinBalance(screen, coins, 25);
+	}
+
+	/**
+	 * Draws a coin balance as a small coin icon followed by the amount,
+	 * centered horizontally at the given baseline (GoG - Currency System).
+	 *
+	 * @param screen
+	 *            Screen to draw on.
+	 * @param coins
+	 *            Coin balance to display.
+	 * @param positionY
+	 *            Baseline Y coordinate of the text.
+	 */
+	public void drawCoinBalance(final Screen screen, final int coins,
+			final int positionY) {
+		final int iconSize = 14;
+		final int iconTextGap = 6;
+
+		backBufferGraphics.setFont(fontRegular);
+		String balanceString = Integer.toString(coins);
+		int totalWidth = iconSize + iconTextGap
+				+ fontRegularMetrics.stringWidth(balanceString);
+		int startX = (screen.getWidth() - totalWidth) / 2;
+
+		backBufferGraphics.setColor(Color.YELLOW);
+		backBufferGraphics.fillOval(startX, positionY - iconSize + 1,
+				iconSize, iconSize);
+		backBufferGraphics.setColor(Color.WHITE);
+		backBufferGraphics.drawString(balanceString, startX + iconSize
+				+ iconTextGap, positionY);
+	}
+
+	/**
+	 * Draws a diamond balance as a small diamond icon followed by the
+	 * amount, centered horizontally at the given baseline, so it can be
+	 * stacked with the coin balance (GoG - Currency System).
+	 *
+	 * @param screen
+	 *            Screen to draw on.
+	 * @param diamonds
+	 *            Diamond balance to display.
+	 * @param positionY
+	 *            Baseline Y coordinate of the text.
+	 */
+	public void drawDiamondBalance(final Screen screen, final int diamonds,
+			final int positionY) {
+		final int iconSize = 14;
+		final int iconTextGap = 6;
+
+		backBufferGraphics.setFont(fontRegular);
+		String balanceString = Integer.toString(diamonds);
+		int totalWidth = iconSize + iconTextGap
+				+ fontRegularMetrics.stringWidth(balanceString);
+		int startX = (screen.getWidth() - totalWidth) / 2;
+		int iconTop = positionY - iconSize + 1;
+
+		int[] xPoints = { startX + iconSize / 2, startX + iconSize,
+				startX + iconSize / 2, startX };
+		int[] yPoints = { iconTop, iconTop + iconSize / 2,
+				iconTop + iconSize, iconTop + iconSize / 2 };
+
+		backBufferGraphics.setColor(Color.CYAN);
+		backBufferGraphics.fillPolygon(xPoints, yPoints, 4);
+		backBufferGraphics.setColor(Color.WHITE);
+		backBufferGraphics.drawString(balanceString, startX + iconSize
+				+ iconTextGap, positionY);
 	}
 
 	/**
@@ -427,24 +574,69 @@ public final class DrawManager {
 	 *
 	 * @param screen Screen where the popup is drawn.
 	 * @param achievement Newly unlocked achievement.
+	 * @param elapsedMilliseconds Time since the popup started.
+	 * @param durationMilliseconds Total popup duration.
+	 * @param slideInMilliseconds Slide-in duration.
+	 * @param slideOutMilliseconds Slide-out duration.
 	 */
 	public void drawAchievementUnlocked(final Screen screen,
-			final Achievement achievement) {
-		int boxWidth = screen.getWidth() / 2;
-		int boxHeight = fontRegularMetrics.getHeight() * 3;
-		int boxX = (screen.getWidth() - boxWidth) / 2;
-		int boxY = screen.getHeight() - boxHeight
-				- fontRegularMetrics.getHeight();
+			final Achievement achievement, final long elapsedMilliseconds,
+			final int durationMilliseconds, final int slideInMilliseconds,
+			final int slideOutMilliseconds) {
+		int boxWidth = 218;
+		int boxHeight = 44;
+		int visibleX = screen.getWidth() - boxWidth - 6;
+		int hiddenX = screen.getWidth() + 2;
+		int boxY = 46;
+		int boxX = visibleX;
+
+		if (elapsedMilliseconds < slideInMilliseconds)
+			boxX = hiddenX - (hiddenX - visibleX) * (int) elapsedMilliseconds
+					/ slideInMilliseconds;
+		else if (elapsedMilliseconds > durationMilliseconds
+				- slideOutMilliseconds)
+			boxX = visibleX + (hiddenX - visibleX) * (int) (elapsedMilliseconds
+					- (durationMilliseconds - slideOutMilliseconds))
+					/ slideOutMilliseconds;
 
 		backBufferGraphics.setColor(Color.BLACK);
 		backBufferGraphics.fillRect(boxX, boxY, boxWidth, boxHeight);
 		backBufferGraphics.setColor(Color.GREEN);
 		backBufferGraphics.drawRect(boxX, boxY, boxWidth, boxHeight);
-		drawCenteredRegularString(screen, "Achievement unlocked!", boxY
-				+ fontRegularMetrics.getHeight() * 3 / 2);
+		backBufferGraphics.setColor(Color.GREEN);
+		backBufferGraphics.drawString("ACHIEVEMENT UNLOCKED", boxX + 34,
+				boxY + 16);
+		drawSprite(achievement.getSpriteType(), boxX + 8, boxY + 23,
+				Color.YELLOW);
 		backBufferGraphics.setColor(Color.WHITE);
-		drawCenteredRegularString(screen, achievement.getName(), boxY
-				+ fontRegularMetrics.getHeight() * 5 / 2);
+		backBufferGraphics.drawString(achievement.getName(), boxX + 34,
+				boxY + 35);
+	}
+
+	/**
+	 * Draws an achievement icon alongside its name, status, and description.
+	 *
+	 * @param screen Screen where the achievement is drawn.
+	 * @param achievement Achievement to display.
+	 */
+	public void drawAchievement(final Screen screen,
+			final Achievement achievement) {
+		int iconX = screen.getWidth() / 5;
+		int contentX = iconX + 40;
+		int nameY = screen.getHeight() / 2;
+		String status = achievement.isUnlocked() ? "UNLOCKED" : "LOCKED";
+
+		drawSprite(achievement.getSpriteType(), iconX, nameY - 20,
+				achievement.isUnlocked() ? Color.YELLOW : Color.DARK_GRAY);
+		backBufferGraphics.setFont(fontRegular);
+		backBufferGraphics.setColor(achievement.isUnlocked() ? Color.WHITE
+				: Color.GRAY);
+		backBufferGraphics.drawString(achievement.getName() + " - " + status,
+				contentX, nameY);
+		backBufferGraphics.setColor(Color.GRAY);
+		backBufferGraphics.drawString("Unlock: defeat "
+				+ achievement.getRequiredEnemyKills() + " enemies.", contentX,
+				nameY + fontRegularMetrics.getHeight() * 2);
 	}
 
 	/**
@@ -738,5 +930,33 @@ public final class DrawManager {
 		else
 			backBufferGraphics.setColor(Color.WHITE);
 		drawCenteredRegularString(screen, string, height);
+	}
+	/**
+	 * Draws the damage dim overlay when the player is hit.
+	 *AUTHORED BY: VFX TEAM (Effection)
+	 *Any further inquiries please contact us.
+	 * @param screen
+	 *            Screen to draw on.
+	 * @param effect
+	 *            Dim effect to draw.
+	 */
+	public void drawDamageDim(final Screen screen,
+			final DamageDimEffect effect) {
+		if (effect != null)
+			effect.draw(backBufferGraphics, screen.getWidth(),
+					screen.getHeight());
+	}                                          // <- ADD
+
+	/**                                        // <- ADD
+	 * Draws the low-health glitch effect.
+	 * AUTHORED BY: VFX TEAM (Effection)
+	 *Any further inquiries please contact us.
+	 * 
+	 * @param screen Screen to draw on.
+	 * @param effect Glitch effect to draw.
+	 */
+	public void drawGlitch(final Screen screen, final GlitchEffect effect) {
+		if (effect != null)
+			effect.draw(backBuffer, backBufferGraphics);
 	}
 }
