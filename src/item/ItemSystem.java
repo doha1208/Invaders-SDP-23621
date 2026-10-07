@@ -2,10 +2,22 @@ package item;
 
 import java.awt.Color;
 import java.awt.Graphics;
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import engine.Core;
@@ -67,6 +79,124 @@ public final class ItemSystem {
 
     /** The current run. May be null outside a run (menus, etc.). */
     public static ItemSystem current() { return current; }
+
+    // --- Equipped items: owned and equipped outside a run, at most one equipped, used from the next run on. ---
+    // Ownership is saved next to the game, like the coin balance. How an item becomes owned
+    // (e.g. a shop purchase) belongs to the caller, which then calls grantEquipment.
+
+    private static final String EQUIPMENT_FILE = "equipment";
+    private static Set<String> ownedEquipment;
+    private static String equippedId;
+
+    /** All equipped-type items, in catalog order. */
+    public static List<ItemInfo> equipmentItems() {
+        List<ItemInfo> equipment = new ArrayList<ItemInfo>();
+        for (ItemInfo item : new ItemDefinitions(ItemBalance.load()).all())
+            if (item.activationMode == ActivationMode.EQUIPPED) equipment.add(item);
+        return Collections.unmodifiableList(equipment);
+    }
+
+    public static boolean isOwned(String itemId) {
+        loadEquipment();
+        return ownedEquipment.contains(itemId);
+    }
+
+    /** The equipped item, or null when nothing is equipped. */
+    public static ItemInfo equippedItem() {
+        loadEquipment();
+        return equippedId == null ? null : equipment(equippedId);
+    }
+
+    /**
+     * Makes the player own an equipped item, e.g. after a shop purchase. Returns true when the item
+     * is owned afterwards (also when it already was); false for an unknown or non-equipped item, or
+     * when the ownership could not be saved (nothing changes then, so the caller can undo its side).
+     */
+    public static boolean grantEquipment(String itemId) {
+        ItemInfo item = equipment(itemId);
+        if (item == null) return false;
+        loadEquipment();
+        if (ownedEquipment.contains(itemId)) return true;
+        ownedEquipment.add(itemId);
+        if (!saveEquipment()) {
+            ownedEquipment.remove(itemId);
+            return false;
+        }
+        Core.getLogger().info("Equipment owned: " + item.displayName + ".");
+        return true;
+    }
+
+    /** Equips an owned item, replacing the equipped one. Takes effect when the next run starts. */
+    public static boolean equip(String itemId) {
+        ItemInfo item = equipment(itemId);
+        if (item == null || !isOwned(itemId)) return false;
+        String previous = equippedId;
+        equippedId = itemId;
+        if (!saveEquipment()) {
+            equippedId = previous;
+            return false;
+        }
+        Core.getLogger().info("Equipment equipped: " + item.displayName + ".");
+        return true;
+    }
+
+    /** Takes off the equipped item. Takes effect when the next run starts. */
+    public static void unequip() {
+        loadEquipment();
+        if (equippedId == null) return;
+        String previous = equippedId;
+        equippedId = null;
+        if (saveEquipment()) Core.getLogger().info("Equipment unequipped.");
+        else equippedId = previous;
+    }
+
+    private static ItemInfo equipment(String itemId) {
+        if (itemId == null) return null;
+        ItemInfo item = new ItemDefinitions(ItemBalance.load()).find(itemId);
+        return item != null && item.activationMode == ActivationMode.EQUIPPED ? item : null;
+    }
+
+    /** Reads owned/equipped items once. A missing or broken file means nothing is owned. */
+    private static void loadEquipment() {
+        if (ownedEquipment != null) return;
+        ownedEquipment = new LinkedHashSet<String>();
+        equippedId = null;
+        Properties saved = new Properties();
+        try {
+            File file = equipmentFile();
+            if (!file.exists()) return;
+            try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
+                saved.load(reader);
+            }
+        } catch (IOException | IllegalArgumentException error) {
+            Core.getLogger().warning("Couldn't load equipment, starting with none.");
+            return;
+        }
+        for (String id : saved.getProperty("owned", "").split(","))
+            if (equipment(id.trim()) != null) ownedEquipment.add(id.trim());
+        String equipped = saved.getProperty("equipped", "").trim();
+        equippedId = ownedEquipment.contains(equipped) ? equipped : null;
+    }
+
+    /** Writes owned/equipped items. Returns false (and logs) when the file cannot be written. */
+    private static boolean saveEquipment() {
+        Properties saved = new Properties();
+        saved.setProperty("owned", String.join(",", ownedEquipment));
+        saved.setProperty("equipped", equippedId == null ? "" : equippedId);
+        try (Writer writer = Files.newBufferedWriter(equipmentFile().toPath(), StandardCharsets.UTF_8)) {
+            saved.store(writer, "Item System equipment (owned, equipped)");
+            return true;
+        } catch (IOException error) {
+            Core.getLogger().warning("Couldn't save equipment.");
+            return false;
+        }
+    }
+
+    /** Next to the game files, like the coin balance and player profile. */
+    private static File equipmentFile() throws IOException {
+        String path = ItemSystem.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+        return new File(new File(URLDecoder.decode(path, "UTF-8")).getParent(), EQUIPMENT_FILE);
+    }
 
     /** General entry point for the shop, HUD and effects teams. */
     public ItemAPI api() { return api; }
