@@ -74,7 +74,9 @@ public final class ItemAPI {
     public enum EventType {
         ITEM_SPAWNED, ITEM_COLLECTED, ITEM_USED, EFFECT_STARTED,
         EFFECT_ENDED, SHIELD_BLOCKED, ITEM_EXPIRED,
-        ITEM_GRANTED, PENDING_GRANT_APPLIED
+        ITEM_GRANTED, PENDING_GRANT_APPLIED,
+        /** The magnet took a landed drop it could not keep; it becomes score. */
+        ITEM_CONVERTED
     }
 
     /** Small immutable values are read through public final fields. No setters or state-changing methods. */

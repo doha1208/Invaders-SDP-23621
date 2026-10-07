@@ -396,6 +396,14 @@ public final class ItemSystem {
             case ITEM_EXPIRED:
                 logger.info("Item drop disappeared: " + name + ".");
                 break;
+            case ITEM_CONVERTED: {
+                ItemInfo magnet = equippedThisRun();
+                int points = magnet == null ? 0 : magnet.magnitude.intValue();
+                hooks.addScore(points);
+                logger.info("Magnet: " + name + " could not be kept, +" + points + " score.");
+                showNotice(name + " +" + points);
+                break;
+            }
             default:
                 logger.info("Item event " + event.type + ": " + name + ".");
                 break;

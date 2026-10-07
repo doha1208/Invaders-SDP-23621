@@ -163,14 +163,24 @@ public final class ItemManager {
         // Handles expiry for the elapsed time first, then applies effects gained in this update.
         for (ItemEffectSystem.Ended ended : effects.advance(delta)) emitEnded(ended);
         player = currentPlayer;
-        ItemDropSystem.Frame frame = drops.advance(delta, currentPlayer);
+        boolean magnet = hasEquipped(EffectKind.MAGNET);
+        ItemDropSystem.Frame frame = drops.advance(delta, currentPlayer, magnet);
         for (DropView expired : frame.expired)
             emit(EventType.ITEM_EXPIRED, expired.item.itemId, expired.dropId,
                 null, null, null, null, null, null, expired.bounds);
         if (!currentPlayer.canPickup) return;
         for (DropView contact : frame.contacts) {
             Acquisition acquired = acquire(contact.item);
-            if (acquired.failure != null) continue;
+            if (acquired.failure != null) {
+                // The magnet takes a landed drop it cannot keep (full inventory, max stacks, ...)
+                // and reports it as converted; ItemSystem turns that into score.
+                if (magnet && contact.grounded) {
+                    drops.completePickup(contact.dropId);
+                    emit(EventType.ITEM_CONVERTED, contact.item.itemId, contact.dropId,
+                        null, null, null, null, null, null, contact.bounds);
+                }
+                continue;
+            }
             // The DropSystem contract guarantees contacts stay valid during the same serial call.
             drops.completePickup(contact.dropId);
             emit(EventType.ITEM_COLLECTED, contact.item.itemId, contact.dropId,
