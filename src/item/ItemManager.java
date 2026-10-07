@@ -110,7 +110,9 @@ public final class ItemManager {
         if (request.timing == GrantTiming.NEXT_LEVEL) {
             if (!supportsNextLevel(item)) return GrantFailure.TIMING_NOT_SUPPORTED;
             if (active) return GrantFailure.INVALID_PHASE;
-            return pending.containsKey(item.effectKind) ? GrantFailure.EFFECT_ALREADY_QUEUED : null;
+            if (pending.containsKey(item.effectKind)) return GrantFailure.EFFECT_ALREADY_QUEUED;
+            // Run-wide stacks survive between levels; a full stack would fail when the next level starts.
+            return effects.check(item, null);
         }
         if (item.activationMode == ActivationMode.MANUAL)
             return inventory.firstEmptySlot() < 0 ? GrantFailure.INVENTORY_FULL : null;
