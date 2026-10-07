@@ -45,7 +45,7 @@ public final class DrawManager {
 	/** Top of the item panel, right below the HUD line (Team CS). */
 	private static final int ITEM_PANEL_TOP = 43;
 	/** Size of one item slot box in the item panel. */
-	private static final int ITEM_SLOT_WIDTH = 52;
+	private static final int ITEM_SLOT_WIDTH = 46;
 	private static final int ITEM_SLOT_HEIGHT = 16;
 	/** Item notice baseline, measured up from the bottom of the screen. */
 	private static final int ITEM_NOTICE_BOTTOM_OFFSET = 60;
@@ -355,23 +355,26 @@ public final class DrawManager {
 					ITEM_SLOT_HEIGHT);
 			if (item != null)
 				backBufferGraphics.drawString(item.displayName, x + 4, baseline);
-			x += ITEM_SLOT_WIDTH + 8;
+			x += ITEM_SLOT_WIDTH + 6;
 		}
 
-		// Effects, right-aligned: "RF x2  SH 8s".
+		// Effects, right-aligned and compact: "RFx2 SH8s". The equipped item is
+		// not listed here; the countdown hint names it.
 		int right = screen.getWidth() - 6;
 		for (int i = view.effects.size() - 1; i >= 0; i--) {
 			ItemAPI.EffectView effect = view.effects.get(i);
+			if (effect.item.activationMode == ItemAPI.ActivationMode.EQUIPPED)
+				continue;
 			String label = shortItemName(effect.item.effectKind);
 			if (effect.stacks != null)
-				label += " x" + effect.stacks;
+				label += "x" + effect.stacks;
 			else if (effect.remainingMillis != null)
-				label += " " + (effect.remainingMillis + 999) / 1000 + "s";
+				label += (effect.remainingMillis + 999) / 1000 + "s";
 			right -= metrics.stringWidth(label);
 			backBufferGraphics.setColor(ItemSystem
 					.colorOf(effect.item.effectKind));
 			backBufferGraphics.drawString(label, right, baseline);
-			right -= 10;
+			right -= 8;
 		}
 
 		String notice = items.getNotice();
@@ -383,8 +386,8 @@ public final class DrawManager {
 	}
 
 	/**
-	 * Explains the items while the level countdown runs (Team CS - Item
-	 * System).
+	 * Explains the items while the level countdown runs and names the
+	 * equipped item (Team CS - Item System).
 	 *
 	 * @param screen
 	 *            Screen to draw on.
@@ -399,6 +402,10 @@ public final class DrawManager {
 		drawCenteredRegularString(screen, "Keys 1-" + slots
 				+ " use stored items", screen.getHeight() * 2 / 3
 				+ fontRegularMetrics.getHeight());
+		ItemAPI.ItemInfo equipped = items.equippedThisRun();
+		if (equipped != null)
+			drawCenteredRegularString(screen, "Equipped: " + equipped.displayName,
+					screen.getHeight() * 2 / 3 + fontRegularMetrics.getHeight() * 2);
 	}
 
 	/**

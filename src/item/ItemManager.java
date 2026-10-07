@@ -289,4 +289,21 @@ public final class ItemManager {
 
     /** Sets the listener told about every new event. The listener must not call back into the manager. */
     void setEventListener(Consumer<ItemEvent> eventListener) { listener = eventListener; }
+
+    /** Applies the run's equipped item as a run-wide effect. Called once, before the first level. */
+    void equip(ItemInfo item) {
+        ItemAPI.required(item, "item");
+        if (item.activationMode != ActivationMode.EQUIPPED)
+            throw new IllegalArgumentException("not an equipped item: " + item.itemId);
+        if (active) throw new IllegalStateException("equip before the first level");
+        ItemEffectSystem.Applied applied = effects.apply(item, null);
+        if (applied.failure != null) throw new IllegalStateException("cannot equip " + item.itemId);
+    }
+
+    /** True when this run's equipped item has the given effect. */
+    boolean hasEquipped(EffectKind kind) {
+        for (EffectView effect : effects.snapshot())
+            if (effect.item.effectKind == kind && effect.item.activationMode == ActivationMode.EQUIPPED) return true;
+        return false;
+    }
 }

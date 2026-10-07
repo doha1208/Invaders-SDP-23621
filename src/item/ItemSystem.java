@@ -65,10 +65,16 @@ public final class ItemSystem {
 
     private ItemSystem(Random random) {
         balance = ItemBalance.load();
-        manager = new ItemManager(balance.inventoryCapacity, balance, random);
+        ItemInfo equipped = equippedItem();
+        int capacity = balance.inventoryCapacity;
+        if (equipped != null && equipped.effectKind == EffectKind.EXTRA_SLOTS)
+            capacity += equipped.magnitude.intValue();
+        manager = new ItemManager(capacity, balance, random);
         api = new ItemAPI(manager);
         manager.setEventListener(this::onEvent);
-        logger.info("Item system started a new run (" + balance.inventoryCapacity + " item slots).");
+        if (equipped != null) manager.equip(equipped);
+        logger.info("Item system started a new run (" + capacity + " item slots, equipped: "
+            + (equipped == null ? "none" : equipped.displayName) + ").");
     }
 
     /** Run instance for the level number. Starts a new run at level 1 or when there is no run. */
@@ -283,6 +289,13 @@ public final class ItemSystem {
 
     /** Item bullet speed bonus: extra pixels per frame, added on top of the base bullet speed. */
     public double bulletSpeedBonus() { return api.getModifiers().bulletSpeedBonus; }
+
+    /** The item equipped for this run, or null. Fixed when the run starts. */
+    public ItemInfo equippedThisRun() {
+        for (EffectView effect : api.getView().effects)
+            if (effect.item.activationMode == ActivationMode.EQUIPPED) return effect.item;
+        return null;
+    }
 
     /** true means enemies must not move (freeze). */
     public boolean enemiesFrozen() { return api.getModifiers().enemyMovementBlocked; }

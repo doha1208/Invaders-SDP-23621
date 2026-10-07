@@ -164,13 +164,13 @@ class ItemEffectSystem {
         return Collections.unmodifiableList(views);
     }
 
-    /** Removes stage effects and returns Ended(LEVEL_ENDED) for each. Run-wide stacking effects and IDs are kept. */
+    /** Removes stage effects and returns Ended(LEVEL_ENDED) for each. Run-wide stacking and equipped effects and IDs are kept. */
     List<Ended> clear() {
         List<Ended> ended = new ArrayList<Ended>(running.size());
         Iterator<RunningEffect> iterator = running.values().iterator();
         while (iterator.hasNext()) {
             RunningEffect effect = iterator.next();
-            if (effect.stackable()) continue;
+            if (effect.stackable() || effect.equipped()) continue; // run-wide effects stay
             ended.add(new Ended(effect.item.itemId, effect.effectId, EffectEndReason.LEVEL_ENDED));
             iterator.remove();
         }
@@ -204,6 +204,10 @@ class ItemEffectSystem {
             case BULLET_SPEED:
                 expect(item, DurationKind.UNTIL_RUN_END, item.magnitude != null && item.maxStacks != null);
                 break;
+            case EXTRA_SLOTS:
+            case MAGNET:
+                expect(item, DurationKind.WHILE_EQUIPPED, item.magnitude != null);
+                break;
             default:
                 throw new IllegalStateException("unsupported effect kind: " + item.effectKind);
         }
@@ -236,6 +240,7 @@ class ItemEffectSystem {
         }
         boolean timed() { return item.durationKind == DurationKind.TIMED; }
         boolean stackable() { return item.durationKind == DurationKind.UNTIL_RUN_END; }
+        boolean equipped() { return item.durationKind == DurationKind.WHILE_EQUIPPED; }
         /** Using another one while active restarts it instead of being rejected (shield). */
         boolean refreshable() { return item.effectKind == EffectKind.SHIELD; }
         EffectView view() {
