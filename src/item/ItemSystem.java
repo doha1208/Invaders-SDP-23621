@@ -132,46 +132,8 @@ public final class ItemSystem {
         return result;
     }
 
-    /** Permanent extra shots per second. The overload with a base rate also includes the boost extra. */
+    /** Item fire rate bonus: extra shots per second, added on top of the base fire rate. */
     public double fireRateBonus() { return api.getModifiers().fireRateBonus; }
-
-    /** Total extra shots per second to add: permanent bonus + (base * boost multiplier - base). */
-    public double fireRateBonus(double baseFireRate) {
-        return api.getModifiers().fireRateBonus(baseFireRate);
-    }
-
-    /** Effective shots per second. The temporary boost is derived only from the base rate. */
-    public double fireRate(double baseFireRate) {
-        double rate = baseFireRate + fireRateBonus(baseFireRate);
-        ItemAPI.finite(rate, "fireRate");
-        return rate;
-    }
-
-    /** Extra ship speed to add to the unchanged base speed. */
-    public double movementSpeedBonus(double baseSpeed) {
-        return api.getModifiers().movementSpeedBonus(baseSpeed);
-    }
-
-    /** Effective ship movement speed: base speed plus the temporary extra. */
-    public double movementSpeed(double baseSpeed) {
-        return baseSpeed + movementSpeedBonus(baseSpeed);
-    }
-
-    /** Extra score only, for a game that already awards the base points separately. */
-    public int scoreBonus(int basePoints) {
-        return api.getModifiers().scoreBonus(basePoints);
-    }
-
-    /** Converts a nonnegative earned score to whole points, rounding down and capping at Integer.MAX_VALUE. */
-    public int scoreFor(int basePoints) {
-        return basePoints + scoreBonus(basePoints);
-    }
-
-    /** Awards base points plus the active score extra through the game hooks once. */
-    public void addScore(int basePoints) {
-        if (!isLevelActive()) throw new IllegalStateException("level is not active");
-        hooks.addScore(scoreFor(basePoints));
-    }
 
     /** Item bullet speed bonus: extra pixels per frame, added on top of the base bullet speed. */
     public double bulletSpeedBonus() { return api.getModifiers().bulletSpeedBonus; }
@@ -227,10 +189,9 @@ public final class ItemSystem {
                 logger.info("Life item: +1 life, now " + hooks.getLives() + ".");
                 showNotice("Life +1");
             } else {
-                int points = scoreFor(balance.lifeCapBonusScore);
-                hooks.addScore(points);
-                logger.info("Life item at max lives: +" + points + " score.");
-                showNotice("Max lives: +" + points);
+                hooks.addScore(balance.lifeCapBonusScore);
+                logger.info("Life item at max lives: +" + balance.lifeCapBonusScore + " score.");
+                showNotice("Max lives: +" + balance.lifeCapBonusScore);
             }
             return true;
         }
@@ -256,8 +217,6 @@ public final class ItemSystem {
             case ITEM_USED:
                 logger.info("Item used: " + name + " from slot " + (event.slotIndex + 1) + ".");
                 notice = null; // a "(press N)" hint is outdated once the item is used
-                if (item != null && (item.effectKind == EffectKind.BOOST || item.effectKind == EffectKind.SCORE_BOOST))
-                    showNotice(name + " x" + item.magnitude);
                 break;
             case EFFECT_STARTED: {
                 Integer stacks = stacksOf(event.effectId);
@@ -316,8 +275,6 @@ public final class ItemSystem {
             case RAPID_FIRE: return Color.ORANGE;
             case BULLET_SPEED: return Color.YELLOW;
             case FREEZE: return new Color(150, 150, 255);
-            case BOOST: return new Color(100, 255, 100);
-            case SCORE_BOOST: return new Color(255, 100, 200);
             default: return Color.WHITE;
         }
     }
