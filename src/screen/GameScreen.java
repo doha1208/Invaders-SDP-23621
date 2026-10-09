@@ -523,10 +523,6 @@ public class GameScreen extends Screen {
 					coin.getPositionY());
 		drawManager.drawItemDrops(this.items); // Item System (Team CS)
 
-		for (Coin coin : this.coins)
-			drawManager.drawCoin(coin, coin.getPositionX(),
-					coin.getPositionY());
-
 		// Interface.
 		drawManager.drawScore(this, this.score);
 		drawManager.drawLives(this, this.lives);

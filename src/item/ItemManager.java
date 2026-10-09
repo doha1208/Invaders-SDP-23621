@@ -11,12 +11,12 @@ import java.util.function.Consumer;
 import item.ItemAPI.*;
 
 /**
- * An item system coordinator that generates one item per game instance.
- * The game loop calls `beginLevel`, `update`, and `endLevel`, and general functionality is provided via the `ItemAPI`.
- * It retains the same instance during stage transitions but creates a new instance for each new round.
- * It is called only from the thread that owns the game state, and callback re-entry is prohibited.
- * The original states for drops, inventory, and effects are owned by their respective files.
- * This file owns only the stage, current connection, external payment results, reservations, and post-event data.
+ * Item system coordinator, created once per run by game setup code.
+ * The game loop calls beginLevel/update/endLevel; general features are offered through ItemAPI.
+ * The same instance is kept across stages; a new run creates a new instance.
+ * Call only from the thread that owns game state. Re-entrant callbacks are not allowed.
+ * Drop/inventory/effect source state is owned by their own files.
+ * This file owns only the phase, current connection, external grant results, reservations and events.
  */
 public final class ItemManager {
     private final ItemDefinitions definitions;
@@ -31,15 +31,15 @@ public final class ItemManager {
     private LevelRules rules;
     private LifePort lifePort;
     private PlayerSnapshot player;
-    /** Immediately pass on new events, while keeping the queue for `drainEvents` intact. */
+    /** Told about every event as it happens (logging/UI). The event queue is unaffected. */
     private Consumer<ItemEvent> listener;
 
-    /** Set the storage capacity for a single game and the drop randomizer. The stage has not started yet. */
+    /** Sets the run's inventory capacity and drop random source. Does not start a stage yet. */
     public ItemManager(int capacity, Random random) {
         this(capacity, ItemBalance.load(), random);
     }
 
-    /** ItemSystem shares the settings it has read once with the catalog. It is not a public API for external teams. */
+    /** Assembles from already loaded balance values. ItemSystem passes the values it read once at run start. */
     ItemManager(int capacity, ItemBalance balance, Random random) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity");
         definitions = new ItemDefinitions(ItemAPI.required(balance, "balance"));
@@ -111,7 +111,7 @@ public final class ItemManager {
             if (!supportsNextLevel(item)) return GrantFailure.TIMING_NOT_SUPPORTED;
             if (active) return GrantFailure.INVALID_PHASE;
             if (pending.containsKey(item.effectKind)) return GrantFailure.EFFECT_ALREADY_QUEUED;
-            // Since a single-round persistent effect remains active between stages, check the maximum number of stacks before making a reservation.
+            // Run-wide stacks survive between levels; a full stack would fail when the next level starts.
             return effects.check(item, null);
         }
         if (item.activationMode == ActivationMode.MANUAL)
@@ -154,7 +154,7 @@ public final class ItemManager {
                 null, null, null, null, null, null, spawned.bounds);
     }
 
-    /** It returns the elapsed game time (in milliseconds) and the current player state. */
+    /** The game loop passes the elapsed game time (ms) and the current player state. */
     public void update(long delta, PlayerSnapshot currentPlayer) {
         requireActive(); ItemAPI.required(currentPlayer, "player");
         if (delta < 0) throw new IllegalArgumentException("negative delta");
@@ -220,7 +220,7 @@ public final class ItemManager {
         return result;
     }
 
-    /** We're streamlining stage connections, drops, and temporary effects. The inventory, reward history, and per-match buffs will remain unchanged. */
+    /** Clears the stage connection, drops and stage effects. Inventory, grant records and run-wide stacking effects stay for the run. */
     public void endLevel() {
         if (!active) return;
         List<ItemEffectSystem.Ended> ended = effects.clear();
@@ -258,11 +258,10 @@ public final class ItemManager {
     private static boolean supportsNextLevel(ItemInfo item) {
         return item.supportedGrantTimings.contains(GrantTiming.NEXT_LEVEL)
             && item.activationMode == ActivationMode.ON_PICKUP
-            && (item.durationKind == DurationKind.UNTIL_RUN_END
-                || item.durationKind == DurationKind.UNTIL_LEVEL_END)
+            && item.durationKind == DurationKind.UNTIL_RUN_END
             && (item.effectKind == EffectKind.RAPID_FIRE || item.effectKind == EffectKind.BULLET_SPEED);
     }
-    /** Internal package check to prevent overlapping start and end times of stages at the game connection point. */
+    /** Whether a level is active. Used by the game bridge (ItemSystem) to avoid double begin/end. */
     boolean isLevelActive() { return active; }
     private void requireActive() { if (!active) throw new IllegalStateException("level is inactive"); }
     private String levelId() { return active ? rules.levelId : null; }
@@ -286,6 +285,6 @@ public final class ItemManager {
         if (listener != null) listener.accept(event);
     }
 
-    /** Connection for logging and notifications. The listener must not re-enter via the manager's state-change method. */
+    /** Sets the listener told about every new event. The listener must not call back into the manager. */
     void setEventListener(Consumer<ItemEvent> eventListener) { listener = eventListener; }
 }
