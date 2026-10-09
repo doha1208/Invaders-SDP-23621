@@ -193,3 +193,9 @@ coins
 diamonds
 coins.tmp
 diamonds.tmp
+
+# Local item documentation and test artifacts
+/docs/item-manager-lifecycle.md
+/test/integration/ItemManagerLifecycleTest.java
+/test/item/ManagerLifecycleFixture.java
+/tests/
