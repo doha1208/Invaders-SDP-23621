@@ -21,11 +21,33 @@ public class Ship extends Entity {
 	private static final int BULLET_SPEED = -6;
 	/** Movement of the ship for each unit of time. */
 	private static final int SPEED = 2;
-	
+
+	/**
+	 * AUTHORED BY: VFX TEAM (effection)
+	 *
+	 * Blink settings for low health.
+	 */
+	private static final int BLINK_INTERVAL = 200;
+	private static final Color BASE_COLOR = Color.GREEN;
+	private static final Color BLINK_COLOR = new Color(255, 60, 60);
+
 	/** Minimum time between shots. */
 	private Cooldown shootingCooldown;
 	/** Time spent inactive between hits. */
 	private Cooldown destructionCooldown;
+	/** Extra shots per second from items, added to the base rate (Team CS). */
+	private double itemFireRateBonus;
+	/** Extra bullet speed from items, added to the base speed (Team CS). */
+	private double itemBulletSpeedBonus;
+
+	/**
+	 * AUTHORED BY: VFX TEAM (effection)
+	 *
+	 * Blink state for low health.
+	 */
+	private Cooldown blinkCooldown;
+	private boolean blinking;
+	private boolean blinkOn;
 
 	/**
 	 * Constructor, establishes the ship's properties.
@@ -41,6 +63,11 @@ public class Ship extends Entity {
 		this.spriteType = SpriteType.Ship;
 		this.shootingCooldown = Core.getCooldown(SHOOTING_INTERVAL);
 		this.destructionCooldown = Core.getCooldown(1000);
+
+		/**
+		 * AUTHORED BY: VFX TEAM (effection)
+		 */
+		this.blinkCooldown = Core.getCooldown(BLINK_INTERVAL);
 	}
 
 	/**
@@ -70,10 +97,32 @@ public class Ship extends Entity {
 		if (this.shootingCooldown.checkFinished()) {
 			this.shootingCooldown.reset();
 			bullets.add(BulletPool.getBullet(positionX + this.width / 2,
-					positionY, BULLET_SPEED));
+					positionY, BULLET_SPEED - (int) Math.round(this.itemBulletSpeedBonus)));
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Sets the bonuses items add on top of the base fire rate and bullet
+	 * speed (Team CS - Item System). The base values stay unchanged; with
+	 * both bonuses at 0 the ship shoots exactly as before.
+	 *
+	 * @param fireRateBonus
+	 *            Extra shots per second.
+	 * @param bulletSpeedBonus
+	 *            Extra bullet speed in pixels per frame.
+	 */
+	public final void setItemBonuses(final double fireRateBonus,
+			final double bulletSpeedBonus) {
+		this.itemBulletSpeedBonus = Math.max(0, bulletSpeedBonus);
+		double bonus = Math.max(0, fireRateBonus);
+		if (bonus != this.itemFireRateBonus) {
+			this.itemFireRateBonus = bonus;
+			// (base shots per second) + (item bonus) -> new interval.
+			this.shootingCooldown = Core.getCooldown((int) Math.round(
+					1000.0 / (1000.0 / SHOOTING_INTERVAL + bonus)));
+		}
 	}
 
 	/**
@@ -84,6 +133,34 @@ public class Ship extends Entity {
 			this.spriteType = SpriteType.ShipDestroyed;
 		else
 			this.spriteType = SpriteType.Ship;
+
+		/**
+		 * AUTHORED BY: VFX TEAM (effection)
+		 *
+		 * Toggle color each BLINK_INTERVAL ms.
+		 */
+		if (this.blinking && this.blinkCooldown.checkFinished()) {
+			this.blinkOn = !this.blinkOn;
+			setColor(this.blinkOn ? BLINK_COLOR : BASE_COLOR);
+			this.blinkCooldown.reset();
+		}
+	}
+
+	/**
+	 * AUTHORED BY: VFX TEAM (effection)
+	 *
+	 * Turns low-health blinking on or off.
+	 *
+	 * @param blinking
+	 *            True to start blinking.
+	 */
+	public final void setBlinking(final boolean blinking) {
+		if (this.blinking == blinking)
+			return;
+		this.blinking = blinking;
+		this.blinkOn = false;
+		setColor(BASE_COLOR);
+		this.blinkCooldown.reset();
 	}
 
 	/**

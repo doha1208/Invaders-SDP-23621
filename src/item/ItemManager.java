@@ -48,7 +48,7 @@ public final class ItemManager {
         effects = new ItemEffectSystem();
     }
 
-    /** 패키지 내부 테스트 조립용. 외부 팀의 API가 아니다. 네 객체는 이 매니저 전용이어야 한다. */
+    /** For in-package test assembly. Not an API for other teams. The four objects must belong to this manager only. */
     ItemManager(ItemDefinitions definitions, ItemDropSystem drops,
                 ItemInventory inventory, ItemEffectSystem effects) {
         this.definitions = ItemAPI.required(definitions, "definitions");
@@ -75,7 +75,7 @@ public final class ItemManager {
         ItemAPI.required(request, "request");
         GrantResult previous = receipts.get(request.requestId);
         if (previous != null) {
-            // 사용/효과 만료/스테이지 전환 후에도 최초 결과를 그대로 반환한다.
+            // Returns the original result even after use, effect expiry or stage change.
             return previous.request.sameContent(request) ? previous
                 : GrantResult.rejected(request, GrantFailure.REQUEST_ID_CONFLICT, levelId());
         }
@@ -117,7 +117,7 @@ public final class ItemManager {
         if (item.activationMode == ActivationMode.MANUAL)
             return inventory.firstEmptySlot() < 0 ? GrantFailure.INVENTORY_FULL : null;
         if (!active) return GrantFailure.LEVEL_NOT_ACTIVE;
-        return effects.check(item, lifePort); // LIFE라면 읽기 전용 canAddLife만 사용해야 한다.
+        return effects.check(item, lifePort); // For LIFE, only the read-only canAddLife may be used.
     }
 
     /** 게임 루프가 스테이지 진입 시 호출한다. 규칙 검증 후 예약 효과를 적용한다. */
@@ -158,7 +158,7 @@ public final class ItemManager {
     public void update(long delta, PlayerSnapshot currentPlayer) {
         requireActive(); ItemAPI.required(currentPlayer, "player");
         if (delta < 0) throw new IllegalArgumentException("negative delta");
-        // 지난 시간의 만료를 먼저 처리한 뒤 이번 갱신에 얻는 효과를 적용한다.
+        // Handles expiry for the elapsed time first, then applies effects gained in this update.
         for (ItemEffectSystem.Ended ended : effects.advance(delta)) emitEnded(ended);
         player = currentPlayer;
         ItemDropSystem.Frame frame = drops.advance(delta, currentPlayer);
@@ -169,7 +169,7 @@ public final class ItemManager {
         for (DropView contact : frame.contacts) {
             Acquisition acquired = acquire(contact.item);
             if (acquired.failure != null) continue;
-            // 같은 직렬 호출 동안 접촉 개체가 유지됨을 DropSystem 계약이 보장한다.
+            // The DropSystem contract guarantees contacts stay valid during the same serial call.
             drops.completePickup(contact.dropId);
             emit(EventType.ITEM_COLLECTED, contact.item.itemId, contact.dropId,
                 effectId(acquired.effect), acquired.slot, null, null, null, null, contact.bounds);
@@ -187,7 +187,7 @@ public final class ItemManager {
         if (applied.failure != null)
             return applied.failure == GrantFailure.EFFECT_ALREADY_ACTIVE
                 ? UseResult.EFFECT_ALREADY_ACTIVE : UseResult.EFFECT_REJECTED;
-        inventory.consume(slot); // 적용 성공 전에는 절대 슬롯을 비우지 않는다.
+        inventory.consume(slot); // Never empty the slot before the effect is applied.
         emit(EventType.ITEM_USED, item.itemId, null, effectId(applied.effect), slot,
             null, null, null, null, null);
         emitStarted(applied.effect, null);
@@ -225,12 +225,12 @@ public final class ItemManager {
         if (!active) return;
         List<ItemEffectSystem.Ended> ended = effects.clear();
         drops.clear();
-        for (ItemEffectSystem.Ended value : ended) emitEnded(value); // 종료될 levelId를 유지한다.
+        for (ItemEffectSystem.Ended value : ended) emitEnded(value); // Keeps the levelId being ended.
         active = false; rules = null; lifePort = null; player = null;
-        // 인벤토리/미적용 예약/지급 결과/ID/대기 이벤트는 한 판 동안 보존한다.
+        // Inventory, pending reservations, grant results, IDs and queued events are kept for the run.
     }
 
-    /** 바닥 획득과 NOW 직접 지급이 공유한다. 바닥 제거/영수 기록/원인 이벤트는 호출자가 처리한다. */
+    /** Shared by floor pickup and direct NOW grants. The caller handles drop removal, receipts and cause events. */
     private Acquisition acquire(ItemInfo item) {
         if (item.activationMode == ActivationMode.MANUAL) {
             int slot = inventory.firstEmptySlot();
