@@ -152,6 +152,14 @@ public final class ItemAPI {
         /** Max stacks of a stacking effect. null otherwise. */
         public final Integer maxStacks;
         public final Set<GrantTiming> supportedGrantTimings;
+        /** Keeps existing callers that define non-stacking items without a stack limit compatible. */
+        public ItemInfo(String itemId, String name, String description, String iconKey,
+                        ActivationMode mode, EffectKind kind, DurationKind duration,
+                        Long milliseconds, Integer charges, Double magnitude,
+                        Set<GrantTiming> timings) {
+            this(itemId, name, description, iconKey, mode, kind, duration,
+                milliseconds, charges, magnitude, null, timings);
+        }
         public ItemInfo(String itemId, String name, String description, String iconKey,
                         ActivationMode mode, EffectKind kind, DurationKind duration,
                         Long milliseconds, Integer charges, Double magnitude,

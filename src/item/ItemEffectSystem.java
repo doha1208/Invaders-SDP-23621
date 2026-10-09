@@ -44,7 +44,8 @@ class ItemEffectSystem {
     /**
      * Applies synchronously and returns Applied. All foreseeable checks run before success.
      * LIFE: calls port.tryAddLife() once; true → ok(null), false → failed(EFFECT_REJECTED).
-     * SHIELD: keeps durationMillis/charges; using one while active restarts both. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks).
+     * SHIELD: keeps durationMillis/charges; using one while active restarts both. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks),
+     * or a non-stacking additive bonus for older UNTIL_LEVEL_END definitions.
      * FREEZE: blocks enemy movement. BOOST/SCORE_BOOST supply factors used to calculate base-derived extras.
      * Timed boosts expire after durationMillis; using another while active is rejected without consumption.
      * None of them change the ship's base stats directly.
@@ -178,6 +179,7 @@ class ItemEffectSystem {
     }
 
     private static double stackedBonus(RunningEffect effect) {
+        if (!effect.stackable()) return effect.item.magnitude;
         return effect.item.magnitude * Math.log(1 + effect.stacks) / Math.log(2);
     }
 
@@ -202,7 +204,10 @@ class ItemEffectSystem {
                 break;
             case RAPID_FIRE:
             case BULLET_SPEED:
-                expect(item, DurationKind.UNTIL_RUN_END, item.magnitude != null && item.maxStacks != null);
+                if (item.durationKind == DurationKind.UNTIL_LEVEL_END)
+                    expect(item, DurationKind.UNTIL_LEVEL_END, item.magnitude != null);
+                else
+                    expect(item, DurationKind.UNTIL_RUN_END, item.magnitude != null && item.maxStacks != null);
                 break;
             default:
                 throw new IllegalStateException("unsupported effect kind: " + item.effectKind);

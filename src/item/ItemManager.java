@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
 
 import item.ItemAPI.*;
 
@@ -16,7 +17,6 @@ import item.ItemAPI.*;
  * 같은 게임 상태 소유 스레드에서만 호출하며 콜백의 재진입은 금지한다.
  * 드랍/인벤토리/효과의 원본 상태는 각각 담당 파일이 소유한다.
  * 이 파일은 단계, 현재 연결, 외부 지급 결과, 예약, 사후 이벤트만 소유한다.
- * 남은 협력 클래스의 STUB을 구현하기 전에는 전체 기능을 실행할 수 없다.
  */
 public final class ItemManager {
     private final ItemDefinitions definitions;
@@ -31,11 +31,18 @@ public final class ItemManager {
     private LevelRules rules;
     private LifePort lifePort;
     private PlayerSnapshot player;
+    /** 새 사건을 즉시 전달하되, drainEvents용 큐도 그대로 유지한다. */
+    private Consumer<ItemEvent> listener;
 
     /** 한 판의 보관함 용량과 드랍 난수원을 설정한다. 스테이지는 아직 시작하지 않는다. */
     public ItemManager(int capacity, Random random) {
+        this(capacity, ItemBalance.load(), random);
+    }
+
+    /** ItemSystem이 한 번 읽은 설정을 카탈로그와 공유한다. 외부 팀의 공개 API는 아니다. */
+    ItemManager(int capacity, ItemBalance balance, Random random) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity");
-        definitions = new ItemDefinitions();
+        definitions = new ItemDefinitions(ItemAPI.required(balance, "balance"));
         drops = new ItemDropSystem(definitions, ItemAPI.required(random, "random"));
         inventory = new ItemInventory(capacity);
         effects = new ItemEffectSystem();
@@ -103,7 +110,9 @@ public final class ItemManager {
         if (request.timing == GrantTiming.NEXT_LEVEL) {
             if (!supportsNextLevel(item)) return GrantFailure.TIMING_NOT_SUPPORTED;
             if (active) return GrantFailure.INVALID_PHASE;
-            return pending.containsKey(item.effectKind) ? GrantFailure.EFFECT_ALREADY_QUEUED : null;
+            if (pending.containsKey(item.effectKind)) return GrantFailure.EFFECT_ALREADY_QUEUED;
+            // 한 판 지속 효과는 스테이지 사이에도 남으므로 최대 중첩을 예약 전에 검사한다.
+            return effects.check(item, null);
         }
         if (item.activationMode == ActivationMode.MANUAL)
             return inventory.firstEmptySlot() < 0 ? GrantFailure.INVENTORY_FULL : null;
@@ -116,7 +125,7 @@ public final class ItemManager {
         if (active) throw new IllegalStateException("level is already active");
         ItemAPI.required(newRules, "rules"); ItemAPI.required(newPort, "lifePort");
         definitions.validate(newRules); // 전체 규칙/카탈로그를 상태 변경 전에 검증한다.
-        // INACTIVE의 효과 목록은 비어 있어야 한다. 예약은 포트 없는 스테이지 효과로 제한한다.
+        // 비활성 스테이지에도 한 판 지속 효과는 남을 수 있다. 예약은 생명 포트가 필요 없는 강화로 제한한다.
         for (PendingGrantView reservation : pending.values()) {
             if (!supportsNextLevel(reservation.item)) throw new IllegalStateException("invalid pending definition");
             if (effects.check(reservation.item, newPort) != null)
@@ -139,7 +148,7 @@ public final class ItemManager {
     void onEnemyDefeated(DropSource source, double x, double y) {
         requireActive(); ItemAPI.required(source, "source");
         ItemAPI.finite(x, "x"); ItemAPI.finite(y, "y");
-        DropView spawned = drops.spawn(source, x, y);
+        DropView spawned = drops.spawn(source, x, y, effects.stacksByItemId());
         if (spawned != null)
             emit(EventType.ITEM_SPAWNED, spawned.item.itemId, spawned.dropId,
                 null, null, null, null, null, null, spawned.bounds);
@@ -211,7 +220,7 @@ public final class ItemManager {
         return result;
     }
 
-    /** 스테이지 연결·드랍·효과를 정리한다. 보관함과 지급 기록은 같은 판 동안 유지한다. */
+    /** 스테이지 연결·드랍·임시 효과를 정리한다. 보관함·지급 기록·한 판 지속 강화는 유지한다. */
     public void endLevel() {
         if (!active) return;
         List<ItemEffectSystem.Ended> ended = effects.clear();
@@ -249,9 +258,12 @@ public final class ItemManager {
     private static boolean supportsNextLevel(ItemInfo item) {
         return item.supportedGrantTimings.contains(GrantTiming.NEXT_LEVEL)
             && item.activationMode == ActivationMode.ON_PICKUP
-            && item.durationKind == DurationKind.UNTIL_LEVEL_END
+            && (item.durationKind == DurationKind.UNTIL_RUN_END
+                || item.durationKind == DurationKind.UNTIL_LEVEL_END)
             && (item.effectKind == EffectKind.RAPID_FIRE || item.effectKind == EffectKind.BULLET_SPEED);
     }
+    /** 게임 연결부에서 스테이지 중복 시작·종료를 막는 패키지 내부 조회. */
+    boolean isLevelActive() { return active; }
     private void requireActive() { if (!active) throw new IllegalStateException("level is inactive"); }
     private String levelId() { return active ? rules.levelId : null; }
     private static Long effectId(EffectView effect) { return effect == null ? null : effect.effectId; }
@@ -268,7 +280,12 @@ public final class ItemManager {
     private void emit(EventType type, String itemId, Long dropId, Long effectId, Integer slot,
                       Long pendingId, GrantRequest request, GrantStatus status,
                       EffectEndReason reason, Bounds bounds) {
-        events.add(new ItemEvent(nextEventId++, type, itemId, levelId(), dropId, effectId,
-            slot, pendingId, request, status, reason, bounds));
+        ItemEvent event = new ItemEvent(nextEventId++, type, itemId, levelId(), dropId, effectId,
+            slot, pendingId, request, status, reason, bounds);
+        events.add(event);
+        if (listener != null) listener.accept(event);
     }
+
+    /** 로그·알림용 연결. 리스너는 매니저의 상태 변경 메서드로 재진입하면 안 된다. */
+    void setEventListener(Consumer<ItemEvent> eventListener) { listener = eventListener; }
 }

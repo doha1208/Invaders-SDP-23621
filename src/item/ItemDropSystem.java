@@ -1,6 +1,7 @@
 package item;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,32 +63,43 @@ class ItemDropSystem {
      * 같은 적의 중복 처치 통보 방지는 외부 게임이 담당함.
      */
     DropView spawn(DropSource source, double cx, double cy) {
+        return spawn(source, cx, cy, Collections.<String, Integer>emptyMap());
+    }
+
+    /** 현재 중첩 수에 따라 가중치를 낮추고, 최대 중첩인 아이템은 후보에서 제외한다. */
+    DropView spawn(DropSource source, double cx, double cy, Map<String, Integer> stacks) {
         requireActive();
         ItemAPI.required(source, "source");
         ItemAPI.finite(cx, "cx");
         ItemAPI.finite(cy, "cy");
+        ItemAPI.required(stacks, "stacks");
         DropRule rule = rules.dropRules.get(source);
         if (rule == null) throw new IllegalStateException("missing drop rule: " + source);
         if (rule.probability == 0) return null;
         if (rule.probability < 1 && random.nextDouble() >= rule.probability) return null;
 
+        Map<String, Double> weights = new LinkedHashMap<String, Double>();
         double total = 0;
-        int candidates = 0;
+        boolean hadCandidate = false;
         String selected = null;
         for (Map.Entry<String, Double> entry : rule.weights.entrySet()) {
             if (entry.getValue() > 0) {
-                total += entry.getValue();
-                candidates++;
-                selected = entry.getKey();
+                hadCandidate = true;
+                double weight = effectiveWeight(rule, entry.getKey(), entry.getValue(), stacks);
+                if (weight > 0) {
+                    weights.put(entry.getKey(), weight);
+                    total += weight;
+                    selected = entry.getKey();
+                }
             }
         }
-        if (candidates == 0 || !Double.isFinite(total))
+        if (!hadCandidate || !Double.isFinite(total))
             throw new IllegalStateException("invalid drop weights");
-        if (candidates > 1) {
+        if (weights.isEmpty()) return null; // 모든 후보가 최대 중첩이거나 감쇠되어 더 이상 드롭하지 않는다.
+        if (weights.size() > 1) {
             double target = random.nextDouble() * total;
             double cumulative = 0;
-            for (Map.Entry<String, Double> entry : rule.weights.entrySet()) {
-                if (entry.getValue() <= 0) continue;
+            for (Map.Entry<String, Double> entry : weights.entrySet()) {
                 cumulative += entry.getValue();
                 if (target < cumulative) {
                     selected = entry.getKey();
@@ -180,6 +192,14 @@ class ItemDropSystem {
     void clear() {
         items.clear();
         rules = null;
+    }
+
+    private double effectiveWeight(DropRule rule, String itemId, double weight, Map<String, Integer> stacks) {
+        Integer count = stacks.get(itemId);
+        if (count == null || count <= 0) return weight;
+        ItemInfo item = definitions.find(itemId);
+        if (item != null && item.maxStacks != null && count >= item.maxStacks) return 0;
+        return rule.weightFor(itemId, weight, count);
     }
 
     /** 내부 협력용 결과. 값 객체만 완성하며 이동/접촉 계산은 없음. */
