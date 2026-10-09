@@ -1,6 +1,7 @@
 package item;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,6 +64,11 @@ class ItemDropSystem {
      * stacks (itemId → current stack count) lowers stacking items' weights and removes them at max stacks.
      * No drop (null) when every candidate is removed.
      */
+    DropView spawn(DropSource source, double cx, double cy) {
+        return spawn(source, cx, cy, Collections.<String, Integer>emptyMap());
+    }
+
+    /** 현재 중첩 수에 따라 가중치를 낮추고, 최대 중첩인 아이템은 후보에서 제외한다. */
     DropView spawn(DropSource source, double cx, double cy, Map<String, Integer> stacks) {
         requireActive();
         ItemAPI.required(source, "source");

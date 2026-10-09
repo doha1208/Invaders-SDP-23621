@@ -29,6 +29,8 @@ final class ItemBalance {
     final int rapidFireMaxStacks, bulletSpeedMaxStacks;
     final double rapidFireDropDecay, bulletSpeedDropDecay;
     final long freezeDurationMillis;
+    final long boostDurationMillis, scoreBoostDurationMillis;
+    final double boostMultiplier, scoreBoostMultiplier;
 
     final int maxLives, lifeCapBonusScore;
 
@@ -77,6 +79,10 @@ final class ItemBalance {
         bulletSpeedMaxStacks = positiveInt(settings, "bulletSpeed.maxStacks", 10);
         bulletSpeedDropDecay = probability(settings, "bulletSpeed.dropDecay", 0.7);
         freezeDurationMillis = positiveLong(settings, "freeze.durationMillis", 5_000L);
+        boostDurationMillis = positiveLong(settings, "boost.durationMillis", 5_000L);
+        boostMultiplier = multiplier(settings, "boost.multiplier", 1.5);
+        scoreBoostDurationMillis = positiveLong(settings, "scoreBoost.durationMillis", 10_000L);
+        scoreBoostMultiplier = multiplier(settings, "scoreBoost.multiplier", 2.0);
 
         maxLives = positiveInt(settings, "life.maxLives", 5);
         lifeCapBonusScore = nonNegativeInt(settings, "life.capBonusScore", 500);
@@ -134,6 +140,12 @@ final class ItemBalance {
     private static double probability(Properties settings, String key, double fallback) {
         double value = number(settings, key, fallback);
         if (value < 0 || value > 1) throw invalid(key, value, "between 0 and 1");
+        return value;
+    }
+
+    private static double multiplier(Properties settings, String key, double fallback) {
+        double value = number(settings, key, fallback);
+        if (value <= 1.0) throw invalid(key, value, "> 1");
         return value;
     }
 

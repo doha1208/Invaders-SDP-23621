@@ -11,12 +11,12 @@ import java.util.function.Consumer;
 import item.ItemAPI.*;
 
 /**
- * Item system coordinator, created once per run by game setup code.
- * The game loop calls beginLevel/update/endLevel; general features are offered through ItemAPI.
- * The same instance is kept across stages; a new run creates a new instance.
- * Call only from the thread that owns game state. Re-entrant callbacks are not allowed.
- * Drop/inventory/effect source state is owned by their own files.
- * This file owns only the phase, current connection, external grant results, reservations and events.
+ * 게임 초기화 코드가 한 판에 하나 생성하는 아이템 시스템 조정자.
+ * 게임 루프는 beginLevel/update/endLevel을 호출하고 일반 기능은 ItemAPI로 제공한다.
+ * 스테이지 전환 동안 같은 인스턴스를 유지하며 새 판에서는 새 인스턴스를 생성한다.
+ * 같은 게임 상태 소유 스레드에서만 호출하며 콜백의 재진입은 금지한다.
+ * 드랍/인벤토리/효과의 원본 상태는 각각 담당 파일이 소유한다.
+ * 이 파일은 단계, 현재 연결, 외부 지급 결과, 예약, 사후 이벤트만 소유한다.
  */
 public final class ItemManager {
     private final ItemDefinitions definitions;
@@ -31,15 +31,15 @@ public final class ItemManager {
     private LevelRules rules;
     private LifePort lifePort;
     private PlayerSnapshot player;
-    /** Told about every event as it happens (logging/UI). The event queue is unaffected. */
+    /** 새 사건을 즉시 전달하되, drainEvents용 큐도 그대로 유지한다. */
     private Consumer<ItemEvent> listener;
 
-    /** Sets the run's inventory capacity and drop random source. Does not start a stage yet. */
+    /** 한 판의 보관함 용량과 드랍 난수원을 설정한다. 스테이지는 아직 시작하지 않는다. */
     public ItemManager(int capacity, Random random) {
         this(capacity, ItemBalance.load(), random);
     }
 
-    /** Assembles from already loaded balance values. ItemSystem passes the values it read once at run start. */
+    /** ItemSystem이 한 번 읽은 설정을 카탈로그와 공유한다. 외부 팀의 공개 API는 아니다. */
     ItemManager(int capacity, ItemBalance balance, Random random) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity");
         definitions = new ItemDefinitions(ItemAPI.required(balance, "balance"));
@@ -111,7 +111,7 @@ public final class ItemManager {
             if (!supportsNextLevel(item)) return GrantFailure.TIMING_NOT_SUPPORTED;
             if (active) return GrantFailure.INVALID_PHASE;
             if (pending.containsKey(item.effectKind)) return GrantFailure.EFFECT_ALREADY_QUEUED;
-            // Run-wide stacks survive between levels; a full stack would fail when the next level starts.
+            // 한 판 지속 효과는 스테이지 사이에도 남으므로 최대 중첩을 예약 전에 검사한다.
             return effects.check(item, null);
         }
         if (item.activationMode == ActivationMode.MANUAL)
@@ -120,12 +120,12 @@ public final class ItemManager {
         return effects.check(item, lifePort); // For LIFE, only the read-only canAddLife may be used.
     }
 
-    /** Called by the game loop when a stage starts. Validates rules, then applies reserved effects. */
+    /** 게임 루프가 스테이지 진입 시 호출한다. 규칙 검증 후 예약 효과를 적용한다. */
     public void beginLevel(LevelRules newRules, LifePort newPort) {
         if (active) throw new IllegalStateException("level is already active");
         ItemAPI.required(newRules, "rules"); ItemAPI.required(newPort, "lifePort");
-        definitions.validate(newRules); // Validates all rules/catalog before changing state.
-        // The effect list must be empty while INACTIVE. Reservations are limited to port-free stage effects.
+        definitions.validate(newRules); // 전체 규칙/카탈로그를 상태 변경 전에 검증한다.
+        // 비활성 스테이지에도 한 판 지속 효과는 남을 수 있다. 예약은 생명 포트가 필요 없는 강화로 제한한다.
         for (PendingGrantView reservation : pending.values()) {
             if (!supportsNextLevel(reservation.item)) throw new IllegalStateException("invalid pending definition");
             if (effects.check(reservation.item, newPort) != null)
@@ -154,7 +154,7 @@ public final class ItemManager {
                 null, null, null, null, null, null, spawned.bounds);
     }
 
-    /** The game loop passes the elapsed game time (ms) and the current player state. */
+    /** 게임 루프가 진행된 게임 시간(ms)과 현재 플레이어 상태를 전달한다. */
     public void update(long delta, PlayerSnapshot currentPlayer) {
         requireActive(); ItemAPI.required(currentPlayer, "player");
         if (delta < 0) throw new IllegalArgumentException("negative delta");
@@ -220,7 +220,7 @@ public final class ItemManager {
         return result;
     }
 
-    /** Clears the stage connection, drops and stage effects. Inventory, grant records and run-wide stacking effects stay for the run. */
+    /** 스테이지 연결·드랍·임시 효과를 정리한다. 보관함·지급 기록·한 판 지속 강화는 유지한다. */
     public void endLevel() {
         if (!active) return;
         List<ItemEffectSystem.Ended> ended = effects.clear();
@@ -258,10 +258,11 @@ public final class ItemManager {
     private static boolean supportsNextLevel(ItemInfo item) {
         return item.supportedGrantTimings.contains(GrantTiming.NEXT_LEVEL)
             && item.activationMode == ActivationMode.ON_PICKUP
-            && item.durationKind == DurationKind.UNTIL_RUN_END
+            && (item.durationKind == DurationKind.UNTIL_RUN_END
+                || item.durationKind == DurationKind.UNTIL_LEVEL_END)
             && (item.effectKind == EffectKind.RAPID_FIRE || item.effectKind == EffectKind.BULLET_SPEED);
     }
-    /** Whether a level is active. Used by the game bridge (ItemSystem) to avoid double begin/end. */
+    /** 게임 연결부에서 스테이지 중복 시작·종료를 막는 패키지 내부 조회. */
     boolean isLevelActive() { return active; }
     private void requireActive() { if (!active) throw new IllegalStateException("level is inactive"); }
     private String levelId() { return active ? rules.levelId : null; }
@@ -285,6 +286,6 @@ public final class ItemManager {
         if (listener != null) listener.accept(event);
     }
 
-    /** Sets the listener told about every new event. The listener must not call back into the manager. */
+    /** 로그·알림용 연결. 리스너는 매니저의 상태 변경 메서드로 재진입하면 안 된다. */
     void setEventListener(Consumer<ItemEvent> eventListener) { listener = eventListener; }
 }
