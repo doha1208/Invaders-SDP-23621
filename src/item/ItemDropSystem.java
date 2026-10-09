@@ -68,7 +68,7 @@ class ItemDropSystem {
         return spawn(source, cx, cy, Collections.<String, Integer>emptyMap());
     }
 
-    /** 현재 중첩 수에 따라 가중치를 낮추고, 최대 중첩인 아이템은 후보에서 제외한다. */
+    /** We reduce the weight based on the current number of overlaps and exclude items with the maximum number of overlaps from the candidates. */
     DropView spawn(DropSource source, double cx, double cy, Map<String, Integer> stacks) {
         requireActive();
         ItemAPI.required(source, "source");
