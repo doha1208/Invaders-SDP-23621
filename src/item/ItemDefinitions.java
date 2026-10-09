@@ -107,26 +107,6 @@ class ItemDefinitions {
         );
         definitions.put(freeze.itemId, freeze);
 
-        ItemInfo boost = new ItemInfo(
-            "boost", "Boost",
-            "Adds " + ((balance.boostMultiplier - 1.0) * 100)
-                + "% of base ship speed and fire rate for " + seconds(balance.boostDurationMillis) + " seconds.",
-            "boost", ActivationMode.MANUAL, EffectKind.BOOST, DurationKind.TIMED,
-            balance.boostDurationMillis, null, balance.boostMultiplier, null,
-            EnumSet.of(GrantTiming.NOW)
-        );
-        definitions.put(boost.itemId, boost);
-
-        ItemInfo scoreBoost = new ItemInfo(
-            "score_boost", "Score Boost",
-            "Adds " + ((balance.scoreBoostMultiplier - 1.0) * 100)
-                + "% of base earned score for " + seconds(balance.scoreBoostDurationMillis) + " seconds.",
-            "score_boost", ActivationMode.MANUAL, EffectKind.SCORE_BOOST, DurationKind.TIMED,
-            balance.scoreBoostDurationMillis, null, balance.scoreBoostMultiplier, null,
-            EnumSet.of(GrantTiming.NOW)
-        );
-        definitions.put(scoreBoost.itemId, scoreBoost);
-
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
         validateDefinitions();
@@ -135,9 +115,7 @@ class ItemDefinitions {
     /**
      * Looks up a registered ID. Returns null only for a valid but unknown ID. The list is immutable for a run.
      * Registered by default: life (instant, +1 life), shield (manual, time/charges), rapid_fire (on pickup, stacks for the run),
-     * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time),
-     * boost (manual, temporary extra ship speed/fire rate), score_boost (manual, temporary extra earned score).
-     * The new active items are available to the shop but excluded from default enemy drop weights.
+     * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time).
      * All support NOW. Only rapid_fire/bullet_speed support NEXT_LEVEL. Values come from ItemBalance (config file).
      */
     ItemInfo find(String itemId) { return itemsById.get(itemId); }
@@ -150,9 +128,8 @@ class ItemDefinitions {
      * Checks both DropSource rules, existing IDs, a positive finite weight sum (when p>0), and the configured area.
      * Also checks each definition's kind/duration/value combination. Duplicate effects of the same kind are REJECTed, except SHIELD, which restarts.
      * NEXT_LEVEL is allowed only for RAPID_FIRE/BULLET_SPEED with ON_PICKUP + UNTIL_RUN_END.
-     * LIFE is fixed to INSTANT, active items to TIMED, and the two stacking effects to UNTIL_RUN_END.
-     * SHIELD requires durationMillis/charges, FREEZE requires durationMillis, BOOST/SCORE_BOOST require durationMillis/magnitude>1,
-     * and the two stacking effects require magnitude/maxStacks.
+     * LIFE is fixed to INSTANT, SHIELD/FREEZE to TIMED, and the two stacking effects to UNTIL_RUN_END.
+     * SHIELD requires durationMillis/charges, FREEZE requires durationMillis, the two stacking effects require magnitude/maxStacks.
      * Unsupported combinations throw. Invalid settings are never auto-corrected and the game does not start with them.
      */
     void validate(LevelRules rules) {
@@ -214,15 +191,6 @@ class ItemDefinitions {
                         && item.durationKind == DurationKind.TIMED
                         && item.durationMillis != null
                         && item.charges == null && item.magnitude == null && item.maxStacks == null
-                        && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
-                    break;
-                case BOOST:
-                case SCORE_BOOST:
-                    requireDefinition(item, item.activationMode == ActivationMode.MANUAL
-                        && item.durationKind == DurationKind.TIMED
-                        && item.durationMillis != null
-                        && item.charges == null && item.magnitude != null && item.magnitude > 1.0
-                        && item.maxStacks == null
                         && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW)));
                     break;
                 default:
