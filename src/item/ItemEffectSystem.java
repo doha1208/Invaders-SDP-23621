@@ -45,7 +45,9 @@ class ItemEffectSystem {
      * Applies synchronously and returns Applied. All foreseeable checks run before success.
      * LIFE: calls port.tryAddLife() once; true → ok(null), false → failed(EFFECT_REJECTED).
      * SHIELD: keeps durationMillis/charges; using one while active restarts both. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks).
-     * FREEZE: blocks movement for durationMillis. None of them change the ship's base stats directly.
+     * FREEZE: blocks movement for durationMillis. BOOST/SCORE_BOOST add temporary bonuses derived from base stats.
+     * Using another timed boost while the same kind is active is rejected without consumption.
+     * None of the effects change the ship's base stats directly.
      * A successful lasting effect returns an EffectView with a new effectId, registered before returning.
      * A rejection changes nothing, refreshes no time and consumes no ID. MANUAL items can also be triggered here via useSlot.
      * Input/catalog/coding errors are not hidden as normal rejections. No re-entering the manager via the port or other callbacks.
@@ -112,12 +114,14 @@ class ItemEffectSystem {
     }
 
     /**
-     * Always computes current effects starting from 0/0/false. At most one effect per kind exists.
+     * Always computes current effects from zero bonuses, unit multipliers and no movement block.
+     * At most one effect per kind exists. Temporary BOOST does not multiply run-wide stacking bonuses.
      * Stacking bonus = magnitude * log2(1 + stacks): 1 stack 1x, 2 about 1.58x, 3 2x, 7 3x.
      */
     Modifiers modifiers() {
         double fireRate = 0.0;
         double bulletSpeed = 0.0;
+        double movementSpeedMultiplier = 1.0, fireRateMultiplier = 1.0, scoreMultiplier = 1.0;
         boolean movementBlocked = false;
         for (RunningEffect effect : running.values()) {
             switch (effect.item.effectKind) {
@@ -130,11 +134,19 @@ class ItemEffectSystem {
                 case FREEZE:
                     movementBlocked = true;
                     break;
+                case BOOST:
+                    movementSpeedMultiplier = effect.item.magnitude;
+                    fireRateMultiplier = effect.item.magnitude;
+                    break;
+                case SCORE_BOOST:
+                    scoreMultiplier = effect.item.magnitude;
+                    break;
                 default:
                     break; // The shield works by charges and does not affect stats.
             }
         }
-        return new Modifiers(fireRate, bulletSpeed, movementBlocked);
+        return new Modifiers(fireRate, bulletSpeed, movementBlocked,
+            movementSpeedMultiplier, fireRateMultiplier, scoreMultiplier);
     }
 
     /** itemId → current stack count. Used to lower drop chances. */
@@ -182,6 +194,11 @@ class ItemEffectSystem {
                 break;
             case FREEZE:
                 expect(item, DurationKind.TIMED, item.durationMillis != null);
+                break;
+            case BOOST:
+            case SCORE_BOOST:
+                expect(item, DurationKind.TIMED, item.durationMillis != null
+                    && item.magnitude != null && item.magnitude > 1.0);
                 break;
             case RAPID_FIRE:
             case BULLET_SPEED:
