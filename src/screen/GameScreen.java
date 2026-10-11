@@ -255,9 +255,12 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
-		// Item System (Team CS): item bonuses on top of the base fire rate/bullet speed.
-		this.ship.setItemBonuses(this.items.fireRateBonus(),
-				this.items.bulletSpeedBonus());
+		// Item System (Team CS): item bonuses on top of the base fire rate,
+		// bullet speed and movement speed (stacks and the boost item).
+		this.ship.setItemBonuses(
+				this.items.fireRateBonus(this.ship.getBaseFireRate()),
+				this.items.bulletSpeedBonus(),
+				this.items.movementSpeedBonus(this.ship.getBaseSpeed()));
 
 		if (this.inputDelay.checkFinished() && !this.levelFinished) {
 
@@ -602,7 +605,7 @@ public class GameScreen extends Screen {
 				for (EnemyShip enemyShip : this.enemyShipFormation)
 					if (!enemyShip.isDestroyed()
 							&& checkCollision(bullet, enemyShip)) {
-						this.score += enemyShip.getPointValue();
+						this.score += this.items.scoreFor(enemyShip.getPointValue()); // score boost (Team CS)
 						this.shipsDestroyed++;
 						this.enemyShipFormation.destroy(enemyShip);
 						maybeDropCoin(enemyShip);
@@ -614,7 +617,7 @@ public class GameScreen extends Screen {
 				if (this.enemyShipSpecial != null
 						&& !this.enemyShipSpecial.isDestroyed()
 						&& checkCollision(bullet, this.enemyShipSpecial)) {
-					this.score += this.enemyShipSpecial.getPointValue();
+					this.score += this.items.scoreFor(this.enemyShipSpecial.getPointValue()); // score boost (Team CS)
 					this.shipsDestroyed++;
 					this.enemyShipSpecial.destroy();
 					dropCoin(this.enemyShipSpecial, BONUS_COIN_VALUE);

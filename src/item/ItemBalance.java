@@ -43,6 +43,10 @@ final class ItemBalance {
 
     final int inventoryCapacity;
 
+    /** Equipped items: extra slots, and the magnet score for a drop it cannot keep, extra max lives, and extra active item time. */
+    final int extraSlotsAmount, magnetConvertScore, maxLifeAmount;
+    final long longLastingExtraMillis;
+
     /** Default values (initial design values). */
     static ItemBalance defaults() { return new ItemBalance(new Properties()); }
 
@@ -87,7 +91,7 @@ final class ItemBalance {
         shopBoostPriceCoins = positiveInt(settings, "shop.boost.priceCoins", 10);
         shopScoreBoostPriceCoins = positiveInt(settings, "shop.scoreBoost.priceCoins", 20);
 
-        maxLives = positiveInt(settings, "life.maxLives", 5);
+        maxLives = positiveInt(settings, "life.maxLives", 3);
         lifeCapBonusScore = nonNegativeInt(settings, "life.capBonusScore", 500);
 
         regularDropProbability = probability(settings, "drop.regular.probability", 0.15);
@@ -98,6 +102,8 @@ final class ItemBalance {
         weights.put("rapid_fire", weight(settings, "drop.weight.rapidFire"));
         weights.put("bullet_speed", weight(settings, "drop.weight.bulletSpeed"));
         weights.put("freeze", weight(settings, "drop.weight.freeze"));
+        weights.put("boost", weight(settings, "drop.weight.boost"));
+        weights.put("score_boost", weight(settings, "drop.weight.scoreBoost"));
         dropWeights = java.util.Collections.unmodifiableMap(weights);
         fallSpeed = positiveDouble(settings, "drop.fallSpeed", 80);
         dropWidth = positiveDouble(settings, "drop.width", 24);
@@ -105,6 +111,11 @@ final class ItemBalance {
         groundLifetimeMillis = positiveLong(settings, "drop.groundLifetimeMillis", 8_000L);
 
         inventoryCapacity = positiveInt(settings, "inventory.capacity", 3);
+
+        extraSlotsAmount = positiveInt(settings, "equip.extraSlots.amount", 1);
+        magnetConvertScore = positiveInt(settings, "equip.magnet.convertScore", 100);
+        maxLifeAmount = positiveInt(settings, "equip.maxLife.amount", 1);
+        longLastingExtraMillis = positiveLong(settings, "equip.longLasting.extraMillis", 1_500L);
     }
 
     private static String raw(Properties settings, String key) {

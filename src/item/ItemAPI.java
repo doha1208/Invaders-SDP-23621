@@ -43,10 +43,19 @@ public final class ItemAPI {
         boolean tryAddLife();
     }
 
-    public enum ActivationMode { ON_PICKUP, MANUAL }
-    public enum EffectKind { LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE, BOOST, SCORE_BOOST }
-    /** UNTIL_RUN_END: lasts for the whole run and stacks when picked up again (rapid fire, bullet speed). */
-    public enum DurationKind { INSTANT, TIMED, UNTIL_LEVEL_END, UNTIL_RUN_END }
+    /**
+     * ON_PICKUP: works when picked up (passive). MANUAL: stored in a slot and used with a key (active).
+     * EQUIPPED: owned and equipped outside a run (at most one); works for every run while equipped.
+     */
+    public enum ActivationMode { ON_PICKUP, MANUAL, EQUIPPED }
+    public enum EffectKind {
+        LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE, BOOST, SCORE_BOOST, EXTRA_SLOTS, MAGNET, MAX_LIFE, LONG_LASTING
+    }
+    /**
+     * UNTIL_RUN_END: lasts for the whole run and stacks when picked up again (rapid fire, bullet speed).
+     * WHILE_EQUIPPED: active for the whole run while the item is equipped.
+     */
+    public enum DurationKind { INSTANT, TIMED, UNTIL_LEVEL_END, UNTIL_RUN_END, WHILE_EQUIPPED }
     public enum DropSource { REGULAR_ENEMY, SPECIAL_ENEMY }
     public enum GrantSource { SHOP, REWARD }
     public enum GrantTiming { NOW, NEXT_LEVEL }
@@ -65,7 +74,9 @@ public final class ItemAPI {
     public enum EventType {
         ITEM_SPAWNED, ITEM_COLLECTED, ITEM_USED, EFFECT_STARTED,
         EFFECT_ENDED, SHIELD_BLOCKED, ITEM_EXPIRED,
-        ITEM_GRANTED, PENDING_GRANT_APPLIED
+        ITEM_GRANTED, PENDING_GRANT_APPLIED,
+        /** The magnet took a landed drop it could not keep; it becomes score. */
+        ITEM_CONVERTED
     }
 
     /** Small immutable values are read through public final fields. No setters or state-changing methods. */
@@ -147,7 +158,11 @@ public final class ItemAPI {
         public final DurationKind durationKind;
         public final Long durationMillis;
         public final Integer charges;
-        /** First-pickup bonus for run-wide stacks, or the multiplier for BOOST/SCORE_BOOST. */
+        /**
+         * First-pickup bonus for run-wide stacks, or the multiplier for BOOST/SCORE_BOOST.
+         * Equipped items: EXTRA_SLOTS = extra inventory slots, MAGNET = score for a drop it cannot keep,
+         * MAX_LIFE = extra max lives for the life item, LONG_LASTING = extra milliseconds for timed active items.
+         */
         public final Double magnitude;
         /** Max stacks of a stacking effect. null otherwise. */
         public final Integer maxStacks;
