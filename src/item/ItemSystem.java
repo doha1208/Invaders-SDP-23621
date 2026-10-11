@@ -406,7 +406,7 @@ public final class ItemSystem {
                 logger.info("Item used: " + name + " from slot " + (event.slotIndex + 1) + ".");
                 notice = null; // a "(press N)" hint is outdated once the item is used
                 if (item != null && (item.effectKind == EffectKind.BOOST || item.effectKind == EffectKind.SCORE_BOOST))
-                    showNotice(name + " x" + item.magnitude);
+                    showNotice(name + " x" + multiplier(item.magnitude));
                 break;
             case EFFECT_STARTED: {
                 Integer stacks = stacksOf(event.effectId);
@@ -436,6 +436,11 @@ public final class ItemSystem {
                 logger.info("Item event " + event.type + ": " + name + ".");
                 break;
         }
+    }
+
+    /** A multiplier without trailing zeros: 2.0 -> "2", 1.5 -> "1.5". */
+    private static String multiplier(double value) {
+        return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
     }
 
     private void showNotice(String text) {

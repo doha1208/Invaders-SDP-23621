@@ -353,8 +353,9 @@ public final class DrawManager {
 					: ItemSystem.colorOf(item.effectKind));
 			backBufferGraphics.drawRect(x, ITEM_PANEL_TOP, ITEM_SLOT_WIDTH,
 					ITEM_SLOT_HEIGHT);
-			if (item != null)
-				backBufferGraphics.drawString(item.displayName, x + 4, baseline);
+			if (item != null) // first word only, so "Score Boost" fits as "Score"
+				backBufferGraphics.drawString(item.displayName.split(" ")[0],
+						x + 4, baseline);
 			x += ITEM_SLOT_WIDTH + 6;
 		}
 
@@ -425,6 +426,10 @@ public final class DrawManager {
 			return "SH";
 		case FREEZE:
 			return "FZ";
+		case BOOST:
+			return "BO";
+		case SCORE_BOOST:
+			return "SC";
 		default:
 			return kind.name();
 		}

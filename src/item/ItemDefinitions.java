@@ -109,7 +109,7 @@ class ItemDefinitions {
 
         ItemInfo boost = new ItemInfo(
             "boost", "Boost",
-            "Adds " + ((balance.boostMultiplier - 1.0) * 100)
+            "Adds " + percent(balance.boostMultiplier)
                 + "% of base ship speed and fire rate for " + seconds(balance.boostDurationMillis) + " seconds.",
             "boost", ActivationMode.MANUAL, EffectKind.BOOST, DurationKind.TIMED,
             balance.boostDurationMillis, null, balance.boostMultiplier, null,
@@ -119,7 +119,7 @@ class ItemDefinitions {
 
         ItemInfo scoreBoost = new ItemInfo(
             "score_boost", "Score Boost",
-            "Adds " + ((balance.scoreBoostMultiplier - 1.0) * 100)
+            "Adds " + percent(balance.scoreBoostMultiplier)
                 + "% of base earned score for " + seconds(balance.scoreBoostDurationMillis) + " seconds.",
             "score_boost", ActivationMode.MANUAL, EffectKind.SCORE_BOOST, DurationKind.TIMED,
             balance.scoreBoostDurationMillis, null, balance.scoreBoostMultiplier, null,
@@ -325,6 +325,12 @@ class ItemDefinitions {
             && item.durationMillis == null && item.charges == null
             && item.magnitude != null && item.maxStacks == null
             && item.supportedGrantTimings.equals(EnumSet.of(GrantTiming.NOW));
+    }
+
+    /** Extra share of a multiplier as a percent without trailing zeros: 1.5 -> "50". */
+    private static String percent(double multiplier) {
+        return new java.math.BigDecimal(Double.toString((multiplier - 1.0) * 100))
+            .setScale(1, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
 
     private static String seconds(long millis) {
