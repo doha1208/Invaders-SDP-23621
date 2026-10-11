@@ -44,9 +44,9 @@ public final class DrawManager {
 	private static BufferedImage backBuffer;
 	/** Top of the item panel, right below the HUD line (Team CS). */
 	private static final int ITEM_PANEL_TOP = 43;
-	/** Size of one item slot box in the item panel. */
-	private static final int ITEM_SLOT_WIDTH = 46;
 	private static final int ITEM_SLOT_HEIGHT = 16;
+	/** Item panel font size: small and fixed so the panel fits one line. */
+	private static final float ITEM_FONT_SIZE = 9f;
 	/** Item notice baseline, measured up from the bottom of the screen. */
 	private static final int ITEM_NOTICE_BOTTOM_OFFSET = 60;
 	/** The shield bubble blinks during this many last milliseconds. */
@@ -368,12 +368,15 @@ public final class DrawManager {
 	 */
 	public void drawItemHud(final Screen screen, final ItemSystem items) {
 		ItemAPI.View view = items.api().getView();
-		Font font = fontRegular.deriveFont(12f);
+		// Small fixed font with two-letter labels, so four slots and every
+		// effect fit one line even with the wide pixel font.
+		Font font = fontRegular.deriveFont(ITEM_FONT_SIZE);
 		FontMetrics metrics = backBufferGraphics.getFontMetrics(font);
 		backBufferGraphics.setFont(font);
 		int baseline = ITEM_PANEL_TOP + ITEM_SLOT_HEIGHT - 4;
+		int boxWidth = metrics.stringWidth("WW") + 8;
 
-		// Slots: "1 [Shield]" ... an empty slot is a dark box.
+		// Slots: "1 [SH]" ... an empty slot is a dark box.
 		int x = 6;
 		for (int i = 0; i < view.slots.size(); i++) {
 			ItemAPI.ItemInfo item = view.slots.get(i);
@@ -382,12 +385,14 @@ public final class DrawManager {
 			x += metrics.stringWidth("0") + 3;
 			backBufferGraphics.setColor(item == null ? Color.DARK_GRAY
 					: ItemSystem.colorOf(item.effectKind));
-			backBufferGraphics.drawRect(x, ITEM_PANEL_TOP, ITEM_SLOT_WIDTH,
+			backBufferGraphics.drawRect(x, ITEM_PANEL_TOP, boxWidth,
 					ITEM_SLOT_HEIGHT);
-			if (item != null) // first word only, so "Score Boost" fits as "Score"
-				backBufferGraphics.drawString(item.displayName.split(" ")[0],
-						x + 4, baseline);
-			x += ITEM_SLOT_WIDTH + 6;
+			if (item != null) {
+				String label = shortItemName(item.effectKind);
+				backBufferGraphics.drawString(label, x + (boxWidth
+						- metrics.stringWidth(label)) / 2, baseline);
+			}
+			x += boxWidth + 6;
 		}
 
 		// Effects, right-aligned and compact: "RFx2 SH8s". The equipped item is
