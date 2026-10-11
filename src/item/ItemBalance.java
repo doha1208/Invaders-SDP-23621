@@ -102,6 +102,8 @@ final class ItemBalance {
         weights.put("rapid_fire", weight(settings, "drop.weight.rapidFire"));
         weights.put("bullet_speed", weight(settings, "drop.weight.bulletSpeed"));
         weights.put("freeze", weight(settings, "drop.weight.freeze"));
+        weights.put("boost", weight(settings, "drop.weight.boost"));
+        weights.put("score_boost", weight(settings, "drop.weight.scoreBoost"));
         dropWeights = java.util.Collections.unmodifiableMap(weights);
         fallSpeed = positiveDouble(settings, "drop.fallSpeed", 80);
         dropWidth = positiveDouble(settings, "drop.width", 24);

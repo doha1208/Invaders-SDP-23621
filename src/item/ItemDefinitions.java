@@ -205,7 +205,7 @@ class ItemDefinitions {
      * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time),
      * boost (manual, temporary extra ship speed/fire rate), score_boost (manual, temporary extra earned score),
      * extra_slots / magnet / max_life / long_lasting (owned and equipped outside a run, work in every run while equipped; never dropped).
-     * The new active items are available to the shop but excluded from default enemy drop weights.
+     * boost / score_boost drop from enemies like the other items (drop.weight.boost / drop.weight.scoreBoost).
      * All support NOW. Only rapid_fire/bullet_speed support NEXT_LEVEL. Values come from ItemBalance (config file).
      */
     ItemInfo find(String itemId) { return itemsById.get(itemId); }
