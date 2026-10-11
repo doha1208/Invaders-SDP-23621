@@ -160,6 +160,23 @@ class ItemDefinitions {
         );
         definitions.put(magnet.itemId, magnet);
 
+        ItemInfo maxLife = new ItemInfo(
+            "max_life",
+            "Max Life",
+            "Equip: the life item can raise lives up to " + (balance.maxLives + balance.maxLifeAmount)
+                + " instead of " + balance.maxLives + ".",
+            "max_life",
+            ActivationMode.EQUIPPED,
+            EffectKind.MAX_LIFE,
+            DurationKind.WHILE_EQUIPPED,
+            null,
+            null,
+            (double) balance.maxLifeAmount,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(maxLife.itemId, maxLife);
+
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
         validateDefinitions();
@@ -170,7 +187,7 @@ class ItemDefinitions {
      * Registered by default: life (instant, +1 life), shield (manual, time/charges), rapid_fire (on pickup, stacks for the run),
      * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time),
      * boost (manual, temporary extra ship speed/fire rate), score_boost (manual, temporary extra earned score),
-     * extra_slots / magnet (owned and equipped outside a run, work in every run while equipped; never dropped).
+     * extra_slots / magnet / max_life (owned and equipped outside a run, work in every run while equipped; never dropped).
      * The new active items are available to the shop but excluded from default enemy drop weights.
      * All support NOW. Only rapid_fire/bullet_speed support NEXT_LEVEL. Values come from ItemBalance (config file).
      */
@@ -263,6 +280,7 @@ class ItemDefinitions {
                     break;
                 case EXTRA_SLOTS:
                 case MAGNET:
+                case MAX_LIFE:
                     requireDefinition(item, isEquipped(item));
                     break;
                 default:

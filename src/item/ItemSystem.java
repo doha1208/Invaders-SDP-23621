@@ -43,6 +43,8 @@ public final class ItemSystem {
 
     /** Balance values of this run (res/item-balance.properties). Read once when the run starts. */
     private final ItemBalance balance;
+    /** Highest lives the life item can reach this run (raised by the Max Life equipped item). */
+    private final int maxLives;
     private final ItemManager manager;
     private final ItemAPI api;
     private GameHooks hooks;
@@ -69,11 +71,13 @@ public final class ItemSystem {
         int capacity = balance.inventoryCapacity;
         if (equipped != null && equipped.effectKind == EffectKind.EXTRA_SLOTS)
             capacity += equipped.magnitude.intValue();
+        maxLives = balance.maxLives + (equipped != null && equipped.effectKind == EffectKind.MAX_LIFE
+            ? equipped.magnitude.intValue() : 0);
         manager = new ItemManager(capacity, balance, random);
         api = new ItemAPI(manager);
         manager.setEventListener(this::onEvent);
         if (equipped != null) manager.equip(equipped);
-        logger.info("Item system started a new run (" + capacity + " item slots, equipped: "
+        logger.info("Item system started a new run (" + capacity + " item slots, max lives " + maxLives + ", equipped: "
             + (equipped == null ? "none" : equipped.displayName) + ").");
     }
 
@@ -343,7 +347,7 @@ public final class ItemSystem {
     private final LifePort lifePort = new LifePort() {
         public boolean canAddLife() { return true; }
         public boolean tryAddLife() {
-            if (hooks.getLives() < balance.maxLives) {
+            if (hooks.getLives() < maxLives) {
                 hooks.addLife();
                 logger.info("Life item: +1 life, now " + hooks.getLives() + ".");
                 showNotice("Life +1");

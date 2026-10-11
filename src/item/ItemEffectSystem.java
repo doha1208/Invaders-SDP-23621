@@ -206,6 +206,7 @@ class ItemEffectSystem {
                 break;
             case EXTRA_SLOTS:
             case MAGNET:
+            case MAX_LIFE:
                 expect(item, DurationKind.WHILE_EQUIPPED, item.magnitude != null);
                 break;
             default:
