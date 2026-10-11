@@ -49,7 +49,7 @@ public final class ItemAPI {
      */
     public enum ActivationMode { ON_PICKUP, MANUAL, EQUIPPED }
     public enum EffectKind {
-        LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE, BOOST, SCORE_BOOST, EXTRA_SLOTS, MAGNET, MAX_LIFE
+        LIFE, SHIELD, RAPID_FIRE, BULLET_SPEED, FREEZE, BOOST, SCORE_BOOST, EXTRA_SLOTS, MAGNET, MAX_LIFE, LONG_LASTING
     }
     /**
      * UNTIL_RUN_END: lasts for the whole run and stacks when picked up again (rapid fire, bullet speed).
@@ -161,7 +161,7 @@ public final class ItemAPI {
         /**
          * First-pickup bonus for run-wide stacks, or the multiplier for BOOST/SCORE_BOOST.
          * Equipped items: EXTRA_SLOTS = extra inventory slots, MAGNET = score for a drop it cannot keep,
-         * MAX_LIFE = extra max lives for the life item.
+         * MAX_LIFE = extra max lives for the life item, LONG_LASTING = extra milliseconds for timed active items.
          */
         public final Double magnitude;
         /** Max stacks of a stacking effect. null otherwise. */

@@ -66,12 +66,12 @@ class ItemEffectSystem {
             return Applied.ok(existing.view());
         }
         if (existing != null && existing.refreshable()) {
-            existing.refresh(); // Same effectId, duration and charges back to full.
+            existing.refresh(activeExtraMillis(item)); // Same effectId, duration and charges back to full.
             return Applied.ok(existing.view());
         }
         if (existing != null) return Applied.failed(GrantFailure.EFFECT_ALREADY_ACTIVE);
 
-        RunningEffect effect = new RunningEffect(nextEffectId++, item);
+        RunningEffect effect = new RunningEffect(nextEffectId++, item, activeExtraMillis(item));
         running.put(effect.effectId, effect); // Returns the View only after registering the source.
         return Applied.ok(effect.view());
     }
@@ -181,6 +181,13 @@ class ItemEffectSystem {
         return effect.item.magnitude * Math.log(1 + effect.stacks) / Math.log(2);
     }
 
+    /** Extra time for a timed active (MANUAL) item while Long Lasting is equipped, otherwise 0. */
+    private long activeExtraMillis(ItemInfo item) {
+        if (item.activationMode != ActivationMode.MANUAL || item.durationKind != DurationKind.TIMED) return 0;
+        RunningEffect longLasting = findByKind(EffectKind.LONG_LASTING);
+        return longLasting == null ? 0 : longLasting.item.magnitude.longValue();
+    }
+
     private RunningEffect findByKind(EffectKind kind) {
         for (RunningEffect effect : running.values()) if (effect.item.effectKind == kind) return effect;
         return null;
@@ -207,6 +214,7 @@ class ItemEffectSystem {
             case EXTRA_SLOTS:
             case MAGNET:
             case MAX_LIFE:
+            case LONG_LASTING:
                 expect(item, DurationKind.WHILE_EQUIPPED, item.magnitude != null);
                 break;
             default:
@@ -229,14 +237,14 @@ class ItemEffectSystem {
         /** Stack count of a stacking (UNTIL_RUN_END) effect. 0 otherwise. */
         int stacks;
 
-        RunningEffect(long effectId, ItemInfo item) {
+        RunningEffect(long effectId, ItemInfo item, long extraMillis) {
             this.effectId = effectId; this.item = item;
-            refresh();
+            refresh(extraMillis);
             stacks = stackable() ? 1 : 0;
         }
-        /** Sets the remaining time and charges to the item's full values. */
-        void refresh() {
-            remainingMillis = item.durationKind == DurationKind.TIMED ? item.durationMillis : 0;
+        /** Sets the remaining time (plus extraMillis) and charges to the item's full values. */
+        void refresh(long extraMillis) {
+            remainingMillis = item.durationKind == DurationKind.TIMED ? item.durationMillis + extraMillis : 0;
             remainingCharges = item.effectKind == EffectKind.SHIELD ? item.charges : null;
         }
         boolean timed() { return item.durationKind == DurationKind.TIMED; }

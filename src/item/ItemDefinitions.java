@@ -177,6 +177,23 @@ class ItemDefinitions {
         );
         definitions.put(maxLife.itemId, maxLife);
 
+        ItemInfo longLasting = new ItemInfo(
+            "long_lasting",
+            "Long Lasting",
+            "Equip: active items (shield, freeze, boost, score boost) last "
+                + seconds(balance.longLastingExtraMillis) + " seconds longer.",
+            "long_lasting",
+            ActivationMode.EQUIPPED,
+            EffectKind.LONG_LASTING,
+            DurationKind.WHILE_EQUIPPED,
+            null,
+            null,
+            (double) balance.longLastingExtraMillis,
+            null,
+            EnumSet.of(GrantTiming.NOW)
+        );
+        definitions.put(longLasting.itemId, longLasting);
+
         itemsById = Collections.unmodifiableMap(definitions);
         items = Collections.unmodifiableList(new ArrayList<ItemInfo>(definitions.values()));
         validateDefinitions();
@@ -187,7 +204,7 @@ class ItemDefinitions {
      * Registered by default: life (instant, +1 life), shield (manual, time/charges), rapid_fire (on pickup, stacks for the run),
      * bullet_speed (on pickup, stacks for the run), freeze (manual, blocks enemy movement for a time),
      * boost (manual, temporary extra ship speed/fire rate), score_boost (manual, temporary extra earned score),
-     * extra_slots / magnet / max_life (owned and equipped outside a run, work in every run while equipped; never dropped).
+     * extra_slots / magnet / max_life / long_lasting (owned and equipped outside a run, work in every run while equipped; never dropped).
      * The new active items are available to the shop but excluded from default enemy drop weights.
      * All support NOW. Only rapid_fire/bullet_speed support NEXT_LEVEL. Values come from ItemBalance (config file).
      */
@@ -281,6 +298,7 @@ class ItemDefinitions {
                 case EXTRA_SLOTS:
                 case MAGNET:
                 case MAX_LIFE:
+                case LONG_LASTING:
                     requireDefinition(item, isEquipped(item));
                     break;
                 default:

@@ -43,8 +43,9 @@ final class ItemBalance {
 
     final int inventoryCapacity;
 
-    /** Equipped items: extra slots, and the magnet score for a drop it cannot keep, and extra max lives. */
+    /** Equipped items: extra slots, and the magnet score for a drop it cannot keep, extra max lives, and extra active item time. */
     final int extraSlotsAmount, magnetConvertScore, maxLifeAmount;
+    final long longLastingExtraMillis;
 
     /** Default values (initial design values). */
     static ItemBalance defaults() { return new ItemBalance(new Properties()); }
@@ -112,6 +113,7 @@ final class ItemBalance {
         extraSlotsAmount = positiveInt(settings, "equip.extraSlots.amount", 1);
         magnetConvertScore = positiveInt(settings, "equip.magnet.convertScore", 100);
         maxLifeAmount = positiveInt(settings, "equip.maxLife.amount", 1);
+        longLastingExtraMillis = positiveLong(settings, "equip.longLasting.extraMillis", 1_500L);
     }
 
     private static String raw(Properties settings, String key) {
