@@ -22,9 +22,9 @@ import item.ItemSystem;
 
 /**
  * Manages screen drawing.
- * 
+ *
  * @author <a href="mailto:RobertoIA1987@gmail.com">Roberto Izquierdo Amo</a>
- * 
+ *
  */
 public final class DrawManager {
 
@@ -45,7 +45,11 @@ public final class DrawManager {
 	/** Top of the item panel, right below the HUD line (Team CS). */
 	private static final int ITEM_PANEL_TOP = 43;
 	/** Size of one item slot box in the item panel. */
+<<<<<<< HEAD
 	private static final int ITEM_SLOT_WIDTH = 46;
+=======
+	private static final int ITEM_SLOT_WIDTH = 52;
+>>>>>>> upstream/main
 	private static final int ITEM_SLOT_HEIGHT = 16;
 	/** Item notice baseline, measured up from the bottom of the screen. */
 	private static final int ITEM_NOTICE_BOTTOM_OFFSET = 60;
@@ -59,6 +63,11 @@ public final class DrawManager {
 	private static Font fontBig;
 	/** Big sized font properties. */
 	private static FontMetrics fontBigMetrics;
+
+		/** Font used for the highlighted menu item. */
+	private static Font fontSelected;
+	/** Highlighted menu item font properties. */
+	private static FontMetrics fontSelectedMetrics;
 
 	/** Sprite types mapped to their images. */
 	private static Map<SpriteType, boolean[][]> spriteMap;
@@ -90,7 +99,15 @@ public final class DrawManager {
 		/** Destroyed enemy ship. */
 		Explosion,
 		/** First Flight achievement icon. */
-		FirstFlight
+		FirstFlight,
+		/** Fleet Master achievement icon. */
+		FleetMaster,
+		/** Weakestship sprite. */
+		Weakestship,
+		/** Infinity Void achievement icon. */
+		InfinityVoid,
+        /** First Boss Kill achievement icon. */
+        BossKill
 	};
 
 	/**
@@ -117,6 +134,10 @@ public final class DrawManager {
 			spriteMap.put(SpriteType.EnemyShipSpecial, new boolean[16][7]);
 			spriteMap.put(SpriteType.Explosion, new boolean[13][7]);
 			spriteMap.put(SpriteType.FirstFlight, new boolean[11][8]);
+			spriteMap.put(SpriteType.FleetMaster, new boolean[23][23]);
+			spriteMap.put(SpriteType.Weakestship, new boolean[11][11]);
+			spriteMap.put(SpriteType.InfinityVoid, new boolean[11][11]);
+            spriteMap.put(SpriteType.BossKill, new boolean[11][11]);
 
 			fileManager.loadSprite(spriteMap);
 			logger.info("Finished loading the sprites.");
@@ -124,6 +145,7 @@ public final class DrawManager {
 			// Font loading.
 			fontRegular = fileManager.loadFont(14f);
 			fontBig = fileManager.loadFont(24f);
+			fontSelected = fontRegular.deriveFont(17f);
 			logger.info("Finished loading the fonts.");
 
 		} catch (IOException e) {
@@ -139,7 +161,7 @@ public final class DrawManager {
 
 	/**
 	 * Returns shared instance of DrawManager.
-	 * 
+	 *
 	 * @return Shared instance of DrawManager.
 	 */
 	protected static DrawManager getInstance() {
@@ -150,7 +172,7 @@ public final class DrawManager {
 
 	/**
 	 * Sets the frame to draw the image on.
-	 * 
+	 *
 	 * @param currentFrame
 	 *            Frame to draw on.
 	 */
@@ -161,11 +183,21 @@ public final class DrawManager {
 	/**
 	 * First part of the drawing process. Initialices buffers, draws the
 	 * background and prepares the images.
-	 * 
+	 *
 	 * @param screen
 	 *            Screen to draw in.
 	 */
 	public void initDrawing(final Screen screen) {
+
+		if (fontRegular == null) {
+			fontRegular = new Font(Font.MONOSPACED, Font.PLAIN, 14);
+		}
+		if (fontBig == null) {
+			fontBig = new Font(Font.MONOSPACED, Font.PLAIN, 24);
+		}
+		if (fontSelected == null) {
+			fontSelected = fontRegular;
+		}
 		backBuffer = new BufferedImage(screen.getWidth(), screen.getHeight(),
 				BufferedImage.TYPE_INT_RGB);
 
@@ -178,6 +210,7 @@ public final class DrawManager {
 
 		fontRegularMetrics = backBufferGraphics.getFontMetrics(fontRegular);
 		fontBigMetrics = backBufferGraphics.getFontMetrics(fontBig);
+				fontSelectedMetrics = backBufferGraphics.getFontMetrics(fontSelected);
 
 		// drawBorders(screen);
 		// drawGrid(screen);
@@ -185,7 +218,7 @@ public final class DrawManager {
 
 	/**
 	 * Draws the completed drawing on screen.
-	 * 
+	 *
 	 * @param screen
 	 *            Screen to draw on.
 	 */
@@ -196,7 +229,7 @@ public final class DrawManager {
 
 	/**
 	 * Draws an entity, using the apropiate image.
-	 * 
+	 *
 	 * @param entity
 	 *            Entity to be drawn.
 	 * @param positionX
@@ -219,17 +252,19 @@ public final class DrawManager {
 	 * @param color Color used for filled pixels.
 	 */
 	public void drawSprite(final SpriteType spriteType, final int positionX,
-			final int positionY, final Color color) {
+						   final int positionY, final Color color) {
 		boolean[][] image = spriteMap.get(spriteType);
 
 		backBufferGraphics.setColor(color);
+
 		for (int i = 0; i < image.length; i++)
 			for (int j = 0; j < image[i].length; j++)
 				if (image[i][j])
-					backBufferGraphics.drawRect(positionX + i * 2, positionY
-							+ j * 2, 1, 1);
+					backBufferGraphics.drawRect(
+							positionX + i * 2,
+							positionY + j * 2,
+							1, 1);
 	}
-
 	/**
 	 * Draws regular text at an exact position, left aligned.
 	 *
@@ -259,7 +294,7 @@ public final class DrawManager {
 		backBufferGraphics.setColor(color);
 		backBufferGraphics.drawRect(positionX, positionY, width, height);
 	}
-	
+
 	/**
 	 * Draws a dropped coin as a filled circle (GoG - Currency System).
 	 * Coins have no entry in the shared sprite file, so they are drawn
@@ -353,6 +388,7 @@ public final class DrawManager {
 					: ItemSystem.colorOf(item.effectKind));
 			backBufferGraphics.drawRect(x, ITEM_PANEL_TOP, ITEM_SLOT_WIDTH,
 					ITEM_SLOT_HEIGHT);
+<<<<<<< HEAD
 			if (item != null) // first word only, so "Score Boost" fits as "Score"
 				backBufferGraphics.drawString(item.displayName.split(" ")[0],
 						x + 4, baseline);
@@ -371,11 +407,31 @@ public final class DrawManager {
 				label += "x" + effect.stacks;
 			else if (effect.remainingMillis != null)
 				label += (effect.remainingMillis + 999) / 1000 + "s";
+=======
+			if (item != null)
+				backBufferGraphics.drawString(item.displayName, x + 4, baseline);
+			x += ITEM_SLOT_WIDTH + 8;
+		}
+
+		// Effects, right-aligned: "RF x2  SH 8s".
+		int right = screen.getWidth() - 6;
+		for (int i = view.effects.size() - 1; i >= 0; i--) {
+			ItemAPI.EffectView effect = view.effects.get(i);
+			String label = shortItemName(effect.item.effectKind);
+			if (effect.stacks != null)
+				label += " x" + effect.stacks;
+			else if (effect.remainingMillis != null)
+				label += " " + (effect.remainingMillis + 999) / 1000 + "s";
+>>>>>>> upstream/main
 			right -= metrics.stringWidth(label);
 			backBufferGraphics.setColor(ItemSystem
 					.colorOf(effect.item.effectKind));
 			backBufferGraphics.drawString(label, right, baseline);
+<<<<<<< HEAD
 			right -= 8;
+=======
+			right -= 10;
+>>>>>>> upstream/main
 		}
 
 		String notice = items.getNotice();
@@ -387,8 +443,13 @@ public final class DrawManager {
 	}
 
 	/**
+<<<<<<< HEAD
 	 * Explains the items while the level countdown runs and names the
 	 * equipped item (Team CS - Item System).
+=======
+	 * Explains the items while the level countdown runs (Team CS - Item
+	 * System).
+>>>>>>> upstream/main
 	 *
 	 * @param screen
 	 *            Screen to draw on.
@@ -403,10 +464,13 @@ public final class DrawManager {
 		drawCenteredRegularString(screen, "Keys 1-" + slots
 				+ " use stored items", screen.getHeight() * 2 / 3
 				+ fontRegularMetrics.getHeight());
+<<<<<<< HEAD
 		ItemAPI.ItemInfo equipped = items.equippedThisRun();
 		if (equipped != null)
 			drawCenteredRegularString(screen, "Equipped: " + equipped.displayName,
 					screen.getHeight() * 2 / 3 + fontRegularMetrics.getHeight() * 2);
+=======
+>>>>>>> upstream/main
 	}
 
 	/**
@@ -426,10 +490,13 @@ public final class DrawManager {
 			return "SH";
 		case FREEZE:
 			return "FZ";
+<<<<<<< HEAD
 		case BOOST:
 			return "BO";
 		case SCORE_BOOST:
 			return "SC";
+=======
+>>>>>>> upstream/main
 		default:
 			return kind.name();
 		}
@@ -617,14 +684,21 @@ public final class DrawManager {
 	 */
 	public void drawMenu(final Screen screen, final MenuItem selected) {
 		for (MenuItem item : MenuItem.values()) {
-			if (item == selected)
+			int baseline = menuItemBaseline(screen, item.ordinal());
+
+			if (item == selected) {
+				String text = "> " + item.getTitle() + " <";
 				backBufferGraphics.setColor(Color.GREEN);
-			else if (!item.isEnabled())
-				backBufferGraphics.setColor(Color.DARK_GRAY);
-			else
-				backBufferGraphics.setColor(Color.WHITE);
-			drawCenteredRegularString(screen, item.getTitle(),
-					menuItemBaseline(screen, item.ordinal()));
+				backBufferGraphics.setFont(fontSelected);
+				backBufferGraphics.drawString(text, screen.getWidth() / 2
+						- fontSelectedMetrics.stringWidth(text) / 2, baseline);
+			} else {
+				if (!item.isEnabled())
+					backBufferGraphics.setColor(Color.DARK_GRAY);
+				else
+					backBufferGraphics.setColor(Color.WHITE);
+				drawCenteredRegularString(screen, item.getTitle(), baseline);
+			}
 		}
 	}
 
@@ -773,8 +847,8 @@ public final class DrawManager {
 		backBufferGraphics.setColor(Color.GREEN);
 		backBufferGraphics.drawString("ACHIEVEMENT UNLOCKED", boxX + 34,
 				boxY + 16);
-		drawSprite(achievement.getSpriteType(), boxX + 8, boxY + 23,
-				Color.YELLOW);
+		drawSprite(achievement.getSpriteType(),
+				boxX + 8, boxY + 20, achievement.getIconColor());
 		backBufferGraphics.setColor(Color.WHITE);
 		backBufferGraphics.drawString(achievement.getName(), boxX + 34,
 				boxY + 35);
@@ -792,19 +866,40 @@ public final class DrawManager {
 		int contentX = iconX + 40;
 		int nameY = screen.getHeight() / 2;
 		String status = achievement.isUnlocked() ? "UNLOCKED" : "LOCKED";
-
-		drawSprite(achievement.getSpriteType(), iconX, nameY - 20,
-				achievement.isUnlocked() ? Color.YELLOW : Color.DARK_GRAY);
+		drawSprite(achievement.getSpriteType(),
+				iconX, nameY - 20,
+				achievement.isUnlocked() ? achievement.getIconColor() : Color.DARK_GRAY);
 		backBufferGraphics.setFont(fontRegular);
 		backBufferGraphics.setColor(achievement.isUnlocked() ? Color.WHITE
 				: Color.GRAY);
 		backBufferGraphics.drawString(achievement.getName() + " - " + status,
 				contentX, nameY);
 		backBufferGraphics.setColor(Color.GRAY);
-		backBufferGraphics.drawString("Unlock: defeat "
-				+ achievement.getRequiredEnemyKills() + " enemies.", contentX,
+		backBufferGraphics.drawString(Core.getAchievementManager()
+				.getRequirementText(achievement), contentX,
 				nameY + fontRegularMetrics.getHeight() * 2);
 	}
+	/**Draw smaller sprite in achievement
+	 *
+	 */
+	public void drawSmallSprite(final SpriteType spriteType,
+								final int positionX, final int positionY, final Color color) {
+
+		boolean[][] image = spriteMap.get(spriteType);
+		backBufferGraphics.setColor(color);
+
+		for (int x = 0; x < image.length; x++) {
+			for (int y = 0; y < image[x].length; y++) {
+				if (image[x][y]) {
+					backBufferGraphics.fillRect(
+							positionX + x,
+							positionY + y,
+							1, 1);
+				}
+			}
+		}
+	}
+
 
 	/**
 	 * Draws the title of a screen reached from the main menu, in the same
@@ -938,24 +1033,6 @@ public final class DrawManager {
 			backBufferGraphics.setColor(Color.GRAY);
 		drawCenteredRegularString(screen, continueOrExitString,
 				screen.getHeight() / 2 + fontRegularMetrics.getHeight() * 10);
-	}
-
-	/**
-	 * Draws high score screen title and instructions.
-	 * 
-	 * @param screen
-	 *            Screen to draw on.
-	 */
-	public void drawHighScoreMenu(final Screen screen) {
-		String highScoreString = "High Scores";
-		String instructionsString = "Press Space to return";
-
-		backBufferGraphics.setColor(Color.GREEN);
-		drawCenteredBigString(screen, highScoreString, screen.getHeight() / 8);
-
-		backBufferGraphics.setColor(Color.GRAY);
-		drawCenteredRegularString(screen, instructionsString,
-				screen.getHeight() / 5);
 	}
 
 	/**
@@ -1189,9 +1266,9 @@ public final class DrawManager {
 		if (effect != null)
 			effect.draw(backBufferGraphics, screen.getWidth(),
 					screen.getHeight());
-	}                                          // <- ADD
+	}                                      
 
-	/**                                        // <- ADD
+	/**                                     
 	 * Draws the low-health glitch effect.
 	 * AUTHORED BY: VFX TEAM (Effection)
 	 *Any further inquiries please contact us.

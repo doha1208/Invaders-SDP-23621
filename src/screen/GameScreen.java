@@ -1,5 +1,6 @@
 package screen;
 
+
 import java.awt.event.KeyEvent;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -18,6 +19,7 @@ import engine.GameSettings;
 import engine.GameState;
 import engine.Achievement;
 import engine.DamageDimEffect;
+import engine.GameEvents;
 import engine.GlitchEffect;
 import entity.Bullet;
 import entity.BulletPool;
@@ -170,7 +172,7 @@ public class GameScreen extends Screen {
 	 *            Current game state.
 	 * @param gameSettings
 	 *            Current game settings.
-	 * @param bonnusLife
+	 * @param bonusLife
 	 *            Checks if a bonus life is awarded this level.
 	 * @param width
 	 *            Screen width.
@@ -215,6 +217,7 @@ public class GameScreen extends Screen {
 		this.bullets = new HashSet<Bullet>();
 		this.damageDim = new DamageDimEffect(900, 0.75f,
         new java.awt.Color(150, 0, 0));  //new update dim effect
+		GameEvents.subscribe(GameEvents.Type.PLAYER_HIT, this.damageDim);
 		this.glitch = new GlitchEffect();
 		this.coins = new HashSet<Coin>();
 		this.achievementPopupQueue = new LinkedList<Achievement>();
@@ -241,8 +244,19 @@ public class GameScreen extends Screen {
 	 * @return Next screen code.
 	 */
 	public final int run() {
+<<<<<<< HEAD
 		super.run();
 		this.items.endLevel(); // Item System (Team CS)
+=======
+		try {
+			super.run();
+		} finally {
+			GameEvents.unsubscribe(GameEvents.Type.PLAYER_HIT, this.damageDim);
+		}
+	
+		this.items.endLevel(); // Item System (Team CS)
+
+>>>>>>> upstream/main
 
 		this.score += LIFE_SCORE * (this.lives - 1);
 		this.logger.info("Screen cleared with a score of " + this.score);
@@ -255,12 +269,18 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
+<<<<<<< HEAD
 		// Item System (Team CS): item bonuses on top of the base fire rate,
 		// bullet speed and movement speed (stacks and the boost item).
 		this.ship.setItemBonuses(
 				this.items.fireRateBonus(this.ship.getBaseFireRate()),
 				this.items.bulletSpeedBonus(),
 				this.items.movementSpeedBonus(this.ship.getBaseSpeed()));
+=======
+		// Item System (Team CS): item bonuses on top of the base fire rate/bullet speed.
+		this.ship.setItemBonuses(this.items.fireRateBonus(),
+				this.items.bulletSpeedBonus());
+>>>>>>> upstream/main
 
 		if (this.inputDelay.checkFinished() && !this.levelFinished) {
 
@@ -349,12 +369,20 @@ public class GameScreen extends Screen {
 			if (this.enemyShipFormation.isEmpty() && this.lives > 0) {
 				this.pendingDiamonds += this.level;
 				collectRemainingCoins();
+				showUnlockedAchievement(Core.getAchievementManager()
+						.recordLevelCompleted(this.level));
+
+				// Last level cleared alive: the game is beaten.
+				if (this.level == Core.getNumLevels())
+					showUnlockedAchievement(Core.getAchievementManager()
+							.recordGameWon(Core.getSelectedShipId()));
 			}
 		}
 
-		if (this.levelFinished && this.screenFinishedCooldown.checkFinished())
+		if (this.levelFinished && this.screenFinishedCooldown.checkFinished()
+				&& this.unlockedAchievement == null
+				&& this.achievementPopupQueue.isEmpty())
 			this.isRunning = false;
-
 	}
 
 	/**
@@ -519,7 +547,7 @@ public class GameScreen extends Screen {
 			drawManager.drawEntity(bullet, bullet.getPositionX(),
 					bullet.getPositionY());
 		// Damage dim (under HUD, so score/lives stay bright). AUTHORED BY: VFX TEAM (Effection)
-		drawManager.drawDamageDim(this, this.damageDim);   // ADD
+		drawManager.drawDamageDim(this, this.damageDim);
 
 		for (Coin coin : this.coins)
 			drawManager.drawCoin(coin, coin.getPositionX(),
@@ -596,7 +624,7 @@ public class GameScreen extends Screen {
 							&& !this.items.tryBlockHit()) { // Shield item (Team CS)
 						this.ship.destroy();
 						this.lives--;
-						this.damageDim.trigger(this.lives <= 1 ? 1f : 0.35f); // <-*AUTHORED BY: VFX TEAM (Effection)
+						GameEvents.emit(GameEvents.Type.PLAYER_HIT, this.lives); // AUTHORED BY: VFX TEAM (Effection)
 						this.logger.info("Hit on player ship, " + this.lives
 								+ " lives remaining.");
 					}

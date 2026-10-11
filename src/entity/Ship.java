@@ -39,8 +39,11 @@ public class Ship extends Entity {
 	private double itemFireRateBonus;
 	/** Extra bullet speed from items, added to the base speed (Team CS). */
 	private double itemBulletSpeedBonus;
+<<<<<<< HEAD
 	/** Extra movement speed from items, added to the base speed (Team CS). */
 	private int itemMovementSpeedBonus;
+=======
+>>>>>>> upstream/main
 
 	/**
 	 * AUTHORED BY: VFX TEAM (effection)
@@ -117,6 +120,7 @@ public class Ship extends Entity {
 	 */
 	public final void setItemBonuses(final double fireRateBonus,
 			final double bulletSpeedBonus) {
+<<<<<<< HEAD
 		setItemBonuses(fireRateBonus, bulletSpeedBonus, 0);
 	}
 
@@ -136,6 +140,8 @@ public class Ship extends Entity {
 			final double bulletSpeedBonus, final double movementSpeedBonus) {
 		this.itemMovementSpeedBonus = (int) Math.round(Math.max(0,
 				movementSpeedBonus));
+=======
+>>>>>>> upstream/main
 		this.itemBulletSpeedBonus = Math.max(0, bulletSpeedBonus);
 		double bonus = Math.max(0, fireRateBonus);
 		if (bonus != this.itemFireRateBonus) {
