@@ -90,7 +90,7 @@ final class ItemBalance {
         shopBoostPriceCoins = positiveInt(settings, "shop.boost.priceCoins", 10);
         shopScoreBoostPriceCoins = positiveInt(settings, "shop.scoreBoost.priceCoins", 20);
 
-        maxLives = positiveInt(settings, "life.maxLives", 5);
+        maxLives = positiveInt(settings, "life.maxLives", 3);
         lifeCapBonusScore = nonNegativeInt(settings, "life.capBonusScore", 500);
 
         regularDropProbability = probability(settings, "drop.regular.probability", 0.15);
