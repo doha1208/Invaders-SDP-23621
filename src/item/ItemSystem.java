@@ -132,8 +132,24 @@ public final class ItemSystem {
         return result;
     }
 
-    /** Item fire rate bonus: extra shots per second, added on top of the base fire rate. */
+    /** Permanent fire rate bonus, in extra shots per second. */
     public double fireRateBonus() { return api.getModifiers().fireRateBonus; }
+
+    /** Permanent bonus plus the temporary boost's extra shots per second, derived only from the base rate. */
+    public double fireRateBonus(double baseFireRate) {
+        return api.getModifiers().fireRateBonus(baseFireRate);
+    }
+
+    /** Extra ship speed to add to the unchanged base speed. */
+    public double movementSpeedBonus(double baseSpeed) {
+        return api.getModifiers().movementSpeedBonus(baseSpeed);
+    }
+
+    /** Extra whole points to add to an earned score. */
+    public int scoreBonus(int basePoints) { return api.getModifiers().scoreBonus(basePoints); }
+
+    /** Earned base points with the active score boost applied once. */
+    public int scoreFor(int basePoints) { return basePoints + scoreBonus(basePoints); }
 
     /** Item bullet speed bonus: extra pixels per frame, added on top of the base bullet speed. */
     public double bulletSpeedBonus() { return api.getModifiers().bulletSpeedBonus; }
@@ -189,9 +205,10 @@ public final class ItemSystem {
                 logger.info("Life item: +1 life, now " + hooks.getLives() + ".");
                 showNotice("Life +1");
             } else {
-                hooks.addScore(balance.lifeCapBonusScore);
-                logger.info("Life item at max lives: +" + balance.lifeCapBonusScore + " score.");
-                showNotice("Max lives: +" + balance.lifeCapBonusScore);
+                int points = scoreFor(balance.lifeCapBonusScore);
+                hooks.addScore(points);
+                logger.info("Life item at max lives: +" + points + " score.");
+                showNotice("Max lives: +" + points);
             }
             return true;
         }
@@ -217,6 +234,8 @@ public final class ItemSystem {
             case ITEM_USED:
                 logger.info("Item used: " + name + " from slot " + (event.slotIndex + 1) + ".");
                 notice = null; // a "(press N)" hint is outdated once the item is used
+                if (item != null && (item.effectKind == EffectKind.BOOST || item.effectKind == EffectKind.SCORE_BOOST))
+                    showNotice(name + " x" + item.magnitude);
                 break;
             case EFFECT_STARTED: {
                 Integer stacks = stacksOf(event.effectId);
@@ -275,6 +294,8 @@ public final class ItemSystem {
             case RAPID_FIRE: return Color.ORANGE;
             case BULLET_SPEED: return Color.YELLOW;
             case FREEZE: return new Color(150, 150, 255);
+            case BOOST: return new Color(100, 255, 100);
+            case SCORE_BOOST: return new Color(255, 100, 200);
             default: return Color.WHITE;
         }
     }
