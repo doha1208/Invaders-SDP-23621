@@ -46,7 +46,7 @@ class ItemEffectSystem {
      * LIFE: calls port.tryAddLife() once; true → ok(null), false → failed(EFFECT_REJECTED).
      * SHIELD: keeps durationMillis/charges; using one while active restarts both. RAPID_FIRE/BULLET_SPEED: run-wide stacks (up to maxStacks).
      * FREEZE: blocks movement for durationMillis. BOOST/SCORE_BOOST add temporary bonuses derived from base stats.
-     * Using another timed boost while the same kind is active is rejected without consumption.
+     * Using another boost or score boost while the same kind is active restarts its time, like the shield.
      * None of the effects change the ship's base stats directly.
      * A successful lasting effect returns an EffectView with a new effectId, registered before returning.
      * A rejection changes nothing, refreshes no time and consumes no ID. MANUAL items can also be triggered here via useSlot.
@@ -250,8 +250,11 @@ class ItemEffectSystem {
         boolean timed() { return item.durationKind == DurationKind.TIMED; }
         boolean stackable() { return item.durationKind == DurationKind.UNTIL_RUN_END; }
         boolean equipped() { return item.durationKind == DurationKind.WHILE_EQUIPPED; }
-        /** Using another one while active restarts it instead of being rejected (shield). */
-        boolean refreshable() { return item.effectKind == EffectKind.SHIELD; }
+        /** Using another one while active restarts it instead of being rejected (shield, boost, score boost). */
+        boolean refreshable() {
+            return item.effectKind == EffectKind.SHIELD || item.effectKind == EffectKind.BOOST
+                || item.effectKind == EffectKind.SCORE_BOOST;
+        }
         EffectView view() {
             return new EffectView(effectId, item, timed() ? Long.valueOf(remainingMillis) : null,
                 remainingCharges, stackable() ? Integer.valueOf(stacks) : null);
