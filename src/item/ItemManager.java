@@ -33,6 +33,8 @@ public final class ItemManager {
     private PlayerSnapshot player;
     /** Told about every event as it happens (logging/UI). The event queue is unaffected. */
     private Consumer<ItemEvent> listener;
+    /** Whether this run's equipped item is the magnet. Fixed by equip() before the first level. */
+    private boolean magnetEquipped;
 
     /** Sets the run's inventory capacity and drop random source. Does not start a stage yet. */
     public ItemManager(int capacity, Random random) {
@@ -163,8 +165,7 @@ public final class ItemManager {
         // Handles expiry for the elapsed time first, then applies effects gained in this update.
         for (ItemEffectSystem.Ended ended : effects.advance(delta)) emitEnded(ended);
         player = currentPlayer;
-        boolean magnet = hasEquipped(EffectKind.MAGNET);
-        ItemDropSystem.Frame frame = drops.advance(delta, currentPlayer, magnet);
+        ItemDropSystem.Frame frame = drops.advance(delta, currentPlayer, magnetEquipped);
         for (DropView expired : frame.expired)
             emit(EventType.ITEM_EXPIRED, expired.item.itemId, expired.dropId,
                 null, null, null, null, null, null, expired.bounds);
@@ -174,7 +175,7 @@ public final class ItemManager {
             if (acquired.failure != null) {
                 // The magnet takes a landed drop it cannot keep (full inventory, max stacks, ...)
                 // and reports it as converted; ItemSystem turns that into score.
-                if (magnet && contact.grounded) {
+                if (magnetEquipped && contact.grounded) {
                     drops.completePickup(contact.dropId);
                     emit(EventType.ITEM_CONVERTED, contact.item.itemId, contact.dropId,
                         null, null, null, null, null, null, contact.bounds);
@@ -308,12 +309,6 @@ public final class ItemManager {
         if (active) throw new IllegalStateException("equip before the first level");
         ItemEffectSystem.Applied applied = effects.apply(item, null);
         if (applied.failure != null) throw new IllegalStateException("cannot equip " + item.itemId);
-    }
-
-    /** True when this run's equipped item has the given effect. */
-    boolean hasEquipped(EffectKind kind) {
-        for (EffectView effect : effects.snapshot())
-            if (effect.item.effectKind == kind && effect.item.activationMode == ActivationMode.EQUIPPED) return true;
-        return false;
+        magnetEquipped = item.effectKind == EffectKind.MAGNET;
     }
 }

@@ -8,7 +8,10 @@ import java.io.Reader;
 import java.io.Writer;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -67,6 +70,7 @@ public final class ItemSystem {
 
     private ItemSystem(Random random) {
         balance = ItemBalance.load();
+        catalog = new ItemDefinitions(balance); // pick up balance changes for the equipment calls too
         ItemInfo equipped = equippedItem();
         int capacity = balance.inventoryCapacity;
         if (equipped != null && equipped.effectKind == EffectKind.EXTRA_SLOTS)
@@ -97,11 +101,18 @@ public final class ItemSystem {
     private static final String EQUIPMENT_FILE = "equipment";
     private static Set<String> ownedEquipment;
     private static String equippedId;
+    /** Item catalog for the equipment calls outside a run. Loaded on first use, refreshed when a run starts. */
+    private static ItemDefinitions catalog;
+
+    private static ItemDefinitions catalog() {
+        if (catalog == null) catalog = new ItemDefinitions(ItemBalance.load());
+        return catalog;
+    }
 
     /** All equipped-type items, in catalog order. */
     public static List<ItemInfo> equipmentItems() {
         List<ItemInfo> equipment = new ArrayList<ItemInfo>();
-        for (ItemInfo item : new ItemDefinitions(ItemBalance.load()).all())
+        for (ItemInfo item : catalog().all())
             if (item.activationMode == ActivationMode.EQUIPPED) equipment.add(item);
         return Collections.unmodifiableList(equipment);
     }
@@ -162,7 +173,7 @@ public final class ItemSystem {
 
     private static ItemInfo equipment(String itemId) {
         if (itemId == null) return null;
-        ItemInfo item = new ItemDefinitions(ItemBalance.load()).find(itemId);
+        ItemInfo item = catalog().find(itemId);
         return item != null && item.activationMode == ActivationMode.EQUIPPED ? item : null;
     }
 
@@ -188,16 +199,29 @@ public final class ItemSystem {
         equippedId = ownedEquipment.contains(equipped) ? equipped : null;
     }
 
-    /** Writes owned/equipped items. Returns false (and logs) when the file cannot be written. */
+    /**
+     * Writes owned/equipped items. Returns false (and logs) when the file cannot be written.
+     * Writes a temporary file first and then replaces the save, like the coin balance, so a crash
+     * while saving never leaves a half-written file that would read as "nothing owned".
+     */
     private static boolean saveEquipment() {
         Properties saved = new Properties();
         saved.setProperty("owned", String.join(",", ownedEquipment));
         saved.setProperty("equipped", equippedId == null ? "" : equippedId);
-        try (Writer writer = Files.newBufferedWriter(equipmentFile().toPath(), StandardCharsets.UTF_8)) {
-            saved.store(writer, "Item System equipment (owned, equipped)");
+        try {
+            Path file = equipmentFile().toPath();
+            Path temp = file.resolveSibling(EQUIPMENT_FILE + ".tmp");
+            try (Writer writer = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
+                saved.store(writer, "Item System equipment (owned, equipped)");
+            }
+            try {
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException error) {
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
             return true;
         } catch (IOException error) {
-            Core.getLogger().warning("Couldn't save equipment.");
+            Core.getLogger().warning("Couldn't save equipment: " + error.getMessage());
             return false;
         }
     }
