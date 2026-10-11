@@ -39,6 +39,8 @@ public class Ship extends Entity {
 	private double itemFireRateBonus;
 	/** Extra bullet speed from items, added to the base speed (Team CS). */
 	private double itemBulletSpeedBonus;
+	/** Extra movement speed from items, added to the base speed (Team CS). */
+	private int itemMovementSpeedBonus;
 
 	/**
 	 * AUTHORED BY: VFX TEAM (effection)
@@ -75,7 +77,7 @@ public class Ship extends Entity {
 	 * reached.
 	 */
 	public final void moveRight() {
-		this.positionX += SPEED;
+		this.positionX += getSpeed();
 	}
 
 	/**
@@ -83,7 +85,7 @@ public class Ship extends Entity {
 	 * reached.
 	 */
 	public final void moveLeft() {
-		this.positionX -= SPEED;
+		this.positionX -= getSpeed();
 	}
 
 	/**
@@ -115,6 +117,25 @@ public class Ship extends Entity {
 	 */
 	public final void setItemBonuses(final double fireRateBonus,
 			final double bulletSpeedBonus) {
+		setItemBonuses(fireRateBonus, bulletSpeedBonus, 0);
+	}
+
+	/**
+	 * Same as {@link #setItemBonuses(double, double)}, plus extra movement
+	 * speed (e.g. the boost item), added on top of the base speed and rounded
+	 * to whole pixels per frame.
+	 *
+	 * @param fireRateBonus
+	 *            Extra shots per second.
+	 * @param bulletSpeedBonus
+	 *            Extra bullet speed in pixels per frame.
+	 * @param movementSpeedBonus
+	 *            Extra movement speed in pixels per frame.
+	 */
+	public final void setItemBonuses(final double fireRateBonus,
+			final double bulletSpeedBonus, final double movementSpeedBonus) {
+		this.itemMovementSpeedBonus = (int) Math.round(Math.max(0,
+				movementSpeedBonus));
 		this.itemBulletSpeedBonus = Math.max(0, bulletSpeedBonus);
 		double bonus = Math.max(0, fireRateBonus);
 		if (bonus != this.itemFireRateBonus) {
@@ -181,10 +202,28 @@ public class Ship extends Entity {
 
 	/**
 	 * Getter for the ship's speed.
-	 * 
-	 * @return Speed of the ship.
+	 *
+	 * @return Speed of the ship, including any item bonus.
 	 */
 	public final int getSpeed() {
+		return SPEED + this.itemMovementSpeedBonus;
+	}
+
+	/**
+	 * Base movement speed without item bonuses (Team CS - Item System).
+	 *
+	 * @return Base speed in pixels per frame.
+	 */
+	public final int getBaseSpeed() {
 		return SPEED;
+	}
+
+	/**
+	 * Base fire rate without item bonuses (Team CS - Item System).
+	 *
+	 * @return Base shots per second.
+	 */
+	public final double getBaseFireRate() {
+		return 1000.0 / SHOOTING_INTERVAL;
 	}
 }
