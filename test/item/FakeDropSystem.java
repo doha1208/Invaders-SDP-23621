@@ -30,14 +30,14 @@ public final class FakeDropSystem extends ItemDropSystem {
     public void expire(long id) { requireDrop(id); expired.add(id); }
     public void spawnNext(ItemInfo item) { nextSpawn = ItemAPI.required(item, "item"); }
     @Override void beginLevel(LevelRules rules) { clear(); this.rules = rules; calls.add("drops.begin"); }
-    @Override DropView spawn(DropSource source, double x, double y) {
+    @Override DropView spawn(DropSource source, double x, double y, Map<String, Integer>stacks) {
         calls.add("drops.spawn:" + source);
         if (nextSpawn == null) return null;
         ItemInfo item = nextSpawn; nextSpawn = null;
         return add(item, new Bounds(x - rules.pickupWidth / 2, y - rules.pickupHeight / 2,
             rules.pickupWidth, rules.pickupHeight));
     }
-    @Override Frame advance(long delta, PlayerSnapshot player) {
+    @Override Frame advance(long delta, PlayerSnapshot player, boolean collectLanded) {
         lastDelta = delta; lastPlayer = player; calls.add("drops.advance");
         List<DropView> gone = new ArrayList<DropView>(), touching = new ArrayList<DropView>();
         for (DropView drop : snapshot()) {
