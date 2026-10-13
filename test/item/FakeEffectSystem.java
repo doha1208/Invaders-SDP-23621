@@ -48,17 +48,55 @@ public final class FakeEffectSystem extends ItemEffectSystem {
         active.put(effect.effectId, effect);
         return Applied.ok(effect);
     }
+    @Override List<Ended> clear() {
+   	 calls.add("effects.clear");
+    	List<Ended> result = new ArrayList<Ended>();
+
+    	for (EffectView effect : snapshot()) {
+        	if (effect.item.durationKind == DurationKind.UNTIL_RUN_END
+                	|| effect.item.durationKind == DurationKind.WHILE_EQUIPPED) {
+            	   continue;
+        	}
+
+        	active.remove(effect.effectId);
+        	result.add(new Ended(
+            		effect.item.itemId,
+            		effect.effectId,
+            		EffectEndReason.LEVEL_ENDED
+        	));
+    	}
+
+    	ending.clear();
+    	nextHit = null;
+    	configuredModifiers = Modifiers.neutral();
+
+    	return ItemAPI.frozen(result, false);
+}
+    
+
     @Override List<Ended> advance(long delta) {
-        if (delta < 0) throw new IllegalArgumentException("negative delta");
-        lastDelta = delta; calls.add("effects.advance");
-        List<Ended> result = new ArrayList<Ended>();
-        for (EffectView effect : snapshot()) if (ending.contains(effect.effectId)) {
-            active.remove(effect.effectId);
-            result.add(new Ended(effect.item.itemId, effect.effectId, EffectEndReason.EXPIRED));
-        }
-        ending.clear();
-        return ItemAPI.frozen(result, false);
-    }
+    	if (delta < 0) throw new IllegalArgumentException("negative delta");
+
+    	lastDelta = delta;
+    	calls.add("effects.advance");
+
+    	List<Ended> result = new ArrayList<Ended>();
+
+    	for (EffectView effect : snapshot()) {
+        	if (ending.contains(effect.effectId)) {
+            		active.remove(effect.effectId);
+            		result.add(new Ended(
+                		effect.item.itemId,
+                		effect.effectId,
+                		EffectEndReason.EXPIRED
+            		));
+        	}
+    	}
+
+    	ending.clear();
+    	return ItemAPI.frozen(result, false);
+}
+    
     @Override Hit tryBlockHit() {
         calls.add("effects.hit");
         if (nextHit == null) return null;
@@ -72,14 +110,6 @@ public final class FakeEffectSystem extends ItemEffectSystem {
     }
     @Override public Modifiers modifiers() { return configuredModifiers; }
     @Override public List<EffectView> snapshot() { return ItemAPI.frozen(new ArrayList<EffectView>(active.values()), false); }
-    @Override List<Ended> clear() {
-        calls.add("effects.clear");
-        List<Ended> result = new ArrayList<Ended>();
-        for (EffectView effect : active.values())
-            result.add(new Ended(effect.item.itemId, effect.effectId, EffectEndReason.LEVEL_ENDED));
-        active.clear(); ending.clear(); nextHit = null; configuredModifiers = Modifiers.neutral();
-        return ItemAPI.frozen(result, false);
-    }
     private EffectView requireEffect(long id) {
         EffectView effect = active.get(id);
         if (effect == null) throw new IllegalArgumentException("unknown effect: " + id);
