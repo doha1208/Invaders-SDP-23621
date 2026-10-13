@@ -30,7 +30,7 @@ public final class ItemManagerIntegrationTest {
             f.item("shield", EffectKind.SHIELD);
             check(f.api.getItemInfos().size() == 1, "fake catalog connected");
             f.startLevel("one"); f.clearCalls(); f.tick(16);
-            check(f.calls().equals(Arrays.asList("effects.advance", "drops.advance")), "shared call trace");
+            check(f.calls().equals(Arrays.asList("effects.advance", "drops.advance")),"shared call trace: " + f.calls());
             check(f.effects.lastDelta == 16 && f.drops.lastDelta == 16, "delta observation");
             check(f.drops.lastPlayer.canUseItems, "player observation");
         }
@@ -205,10 +205,20 @@ public final class ItemManagerIntegrationTest {
                 f.tick(16);
                 check(f.api.tryGrant(request) == receipt, "retry after activation returns original receipt");
                 captureTypes(f);
-                f.endLevel(); captureTypes(f, EventType.EFFECT_ENDED);
-                f.startLevel("third");
-                check(f.api.getView().effects.isEmpty() && f.api.getView().pendingGrants.isEmpty(),
-                    "consumed reservation is not replayed in later stage");
+                f.endLevel();
+		captureTypes(f);
+
+		check(f.effects.snapshot().size() == 1,
+    			"run-wide effect survives level end");
+
+		f.startLevel("third");
+
+		check(f.api.getView().effects.size() == 1
+        			&& f.api.getView().pendingGrants.isEmpty(),
+    			"run-wide effect persists without replaying reservation");
+
+		check(f.api.getView().effects.get(0).effectId == effectId,
+    			"same run-wide effect continues into later stage");
                 check(f.api.tryGrant(request) == receipt, "receipt survives another stage");
                 check(countCall(f, "effects.apply:boost") == 1, "reservation applies only once across stages");
                 captureTypes(f);
@@ -235,11 +245,11 @@ public final class ItemManagerIntegrationTest {
             f.events.capture(); f.events.clear(); f.clearCalls();
             f.endLevel();
             // Inspect fakes too: inactive manager views alone would conceal uncleared state.
-            check(f.effects.snapshot().isEmpty() && f.drops.snapshot().isEmpty(), "underlying world state cleared");
+            check(f.effects.snapshot().size() == 1 && f.drops.snapshot().isEmpty(), "level effects and drops cleared while run-wide effect remains");
             check(f.api.getView().effects.isEmpty() && f.api.getView().drops.isEmpty(), "inactive view has no world objects");
             check(f.api.getView().slots.equals(slots) && f.inventory.at(1) == shield, "slot layout and item survive cleanup");
             check(f.calls().equals(Arrays.asList("effects.clear", "drops.clear")), "cleanup delegates once");
-            List<ItemEvent> ended = captureTypes(f, EventType.EFFECT_ENDED, EventType.EFFECT_ENDED);
+            List<ItemEvent> ended = captureTypes(f, EventType.EFFECT_ENDED);
             for (int i = 0; i < ended.size(); i++) {
                 check(ended.get(i).effectId == active.get(i).effectId, "each effect has one ending");
                 check(ended.get(i).endReason == EffectEndReason.LEVEL_ENDED
@@ -249,7 +259,7 @@ public final class ItemManagerIntegrationTest {
             check(f.calls().size() == 2, "repeated end does not repeat cleanup");
             f.startLevel("fresh"); f.tick(0);
             check(f.api.getView().slots.equals(slots), "inventory also survives next stage start");
-            check(f.effects.snapshot().isEmpty() && f.drops.snapshot().isEmpty(), "new stage does not restore cleared objects");
+            check(f.effects.snapshot().size() == 1 && f.drops.snapshot().isEmpty(), "new stage keeps run-wide effect without restoring cleared objects");
             captureTypes(f);
         }
     }

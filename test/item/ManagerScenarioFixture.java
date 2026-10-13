@@ -28,18 +28,31 @@ public final class ManagerScenarioFixture implements AutoCloseable {
         events = new EventRecorder(api);
     }
     public ItemInfo item(String id, EffectKind kind) {
-        boolean manual = kind == EffectKind.SHIELD || kind == EffectKind.FREEZE;
-        boolean instant = kind == EffectKind.LIFE;
-        ItemInfo item = new ItemInfo(id, id, "test item", id,
-            manual ? ActivationMode.MANUAL : ActivationMode.ON_PICKUP, kind,
-            manual ? DurationKind.TIMED : instant ? DurationKind.INSTANT : DurationKind.UNTIL_LEVEL_END,
-            manual ? Long.valueOf(kind == EffectKind.SHIELD ? 10000 : 5000) : null,
-            kind == EffectKind.SHIELD ? Integer.valueOf(1) : null,
-            manual || instant ? null : Double.valueOf(1.5),
-            manual || instant ? EnumSet.of(GrantTiming.NOW) : EnumSet.allOf(GrantTiming.class));
-        register(item);
-        return item;
-    }
+   	 boolean manual = kind == EffectKind.SHIELD || kind == EffectKind.FREEZE;
+   	 boolean instant = kind == EffectKind.LIFE;
+   	 boolean runWide = kind == EffectKind.RAPID_FIRE || kind == EffectKind.BULLET_SPEED;
+
+    	ItemInfo item = new ItemInfo(
+        	id, id, "test item", id,
+      	  	manual ? ActivationMode.MANUAL : ActivationMode.ON_PICKUP,
+        	kind,
+        	manual ? DurationKind.TIMED
+            		: instant ? DurationKind.INSTANT
+            		: runWide ? DurationKind.UNTIL_RUN_END
+            		: DurationKind.UNTIL_LEVEL_END,
+        	manual ? Long.valueOf(kind == EffectKind.SHIELD ? 10000 : 5000) : null,
+        	kind == EffectKind.SHIELD ? Integer.valueOf(1) : null,
+        	manual || instant ? null : Double.valueOf(1.5),
+        	runWide ? Integer.valueOf(3) : null,
+        	manual || instant
+            		? EnumSet.of(GrantTiming.NOW)
+            		: EnumSet.allOf(GrantTiming.class)
+    	);
+
+    	register(item);
+    	return item;
+}
+   
     public void register(ItemInfo item) {
         if (catalog.items.containsKey(item.itemId)) throw new IllegalArgumentException("duplicate test item ID");
         catalog.items.put(item.itemId, item);
