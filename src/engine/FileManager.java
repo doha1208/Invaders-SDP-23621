@@ -15,6 +15,9 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -42,6 +45,16 @@ public final class FileManager {
 	private static final int MAX_SCORES = 7;
 	/** Name of the file containing persistent player progress. */
 	private static final String PLAYER_PROFILE_FILE = "player-profile";
+	/** Name of the file the player's coin balance is persisted to. */
+	private static final String COINS_FILE = "coins";
+	/** Name of the file the player's diamond balance is persisted to. */
+	private static final String DIAMONDS_FILE = "diamonds";
+	/** Default shared font, relative to res/ or src/. */
+	public static final String DEFAULT_FONT = "silkscreen/Silkscreen-Regular.ttf";
+	/** Folder checked for fonts that are not on the classpath. */
+	private static final String SOURCE_FONT_DIR = "src";
+	/** Original game font in res/, used if the default font is missing. */
+	private static final String FALLBACK_FONT = "font.ttf";
 
 	/**
 	 * private constructor.
@@ -104,33 +117,58 @@ public final class FileManager {
 	}
 
 	/**
-	 * Loads a font of a given size.
-	 * 
+	 * Loads the shared game font (Silkscreen by default).
+	 * TESTING: run with -Dgame.font=<path> to try another font
+	 * without changing code.
+	 *
 	 * @param size
 	 *            Point size of the font.
 	 * @return New font.
 	 * @throws IOException
-	 *             In case of loading problems.
+	 *             If neither the chosen font nor the fallback can be read.
 	 * @throws FontFormatException
 	 *             In case of incorrect font format.
 	 */
 	public Font loadFont(final float size) throws IOException,
 			FontFormatException {
-		InputStream inputStream = null;
-		Font font;
-
+		String path = System.getProperty("game.font", DEFAULT_FONT);
 		try {
-			// Font loading.
-			inputStream = FileManager.class.getClassLoader()
-					.getResourceAsStream("font.ttf");
-			font = Font.createFont(Font.TRUETYPE_FONT, inputStream).deriveFont(
-					size);
-		} finally {
-			if (inputStream != null)
-				inputStream.close();
+			return loadFont(path, size);
+		} catch (IOException e) {
+			logger.warning(e.getMessage() + " Using " + FALLBACK_FONT
+					+ " instead.");
+			return loadFont(FALLBACK_FONT, size);
 		}
+	}
 
-		return font;
+	/**
+	 * Loads a font from the classpath, or from src/ if it is not there.
+	 *
+	 * @param resourcePath
+	 *            Path relative to res/ or src/, for example
+	 *            "silkscreen/Silkscreen-Regular.ttf".
+	 * @param size
+	 *            Font size.
+	 * @return Loaded font.
+	 * @throws IOException
+	 *             If the font cannot be found or read.
+	 * @throws FontFormatException
+	 *             In case of incorrect font format.
+	 */
+	public Font loadFont(final String resourcePath, final float size)
+			throws IOException, FontFormatException {
+		InputStream inputStream = FileManager.class.getClassLoader()
+				.getResourceAsStream(resourcePath);
+		if (inputStream == null) {
+			File file = new File(SOURCE_FONT_DIR, resourcePath);
+			if (!file.isFile())
+				throw new IOException("Font not found on classpath or at "
+						+ file.getPath() + ".");
+			inputStream = new FileInputStream(file);
+		}
+		try (InputStream in = inputStream) {
+			return Font.createFont(Font.TRUETYPE_FONT, in).deriveFont(size);
+		}
 	}
 
 	/**
@@ -300,7 +338,13 @@ public final class FileManager {
 					unlockedAchievements.add(achievementId);
 
 			logger.info("Loading player profile.");
-			return new PlayerProfile(totalEnemiesKilled, unlockedAchievements);
+			Set<String> completedShips = new HashSet<String>();
+			String completed = properties.getProperty("level10CompletedShips", "");
+			if (!completed.isEmpty())
+				for (String shipId : completed.split(","))
+					completedShips.add(shipId);
+			return new PlayerProfile(totalEnemiesKilled, unlockedAchievements,
+					completedShips);
 		} finally {
 			if (inputStream != null)
 				inputStream.close();
@@ -327,6 +371,8 @@ public final class FileManager {
 					playerProfile.getTotalEnemiesKilled()));
 			properties.setProperty("unlockedAchievements", joinAchievementIds(
 					playerProfile.getUnlockedAchievements()));
+			properties.setProperty("level10CompletedShips", joinAchievementIds(
+					playerProfile.getLevel10CompletedShips()));
 			properties.store(outputStream, "Space Invaders player profile");
 			logger.info("Saving player profile.");
 		} finally {
@@ -362,5 +408,151 @@ public final class FileManager {
 			joinedIds.append(achievementId);
 		}
 		return joinedIds.toString();
+	}
+
+	/**
+	 * Loads the player's persisted coin balance (GoG - Currency System).
+	 * Kept in its own file so it never interferes with the player profile.
+	 *
+	 * @return Saved coin balance, or 0 if there is no save file yet or it
+	 *         cannot be read.
+	 */
+	public int loadCoins() {
+		return loadBalance(COINS_FILE, "coin");
+	}
+
+	/**
+	 * Saves the player's coin balance to disk (GoG - Currency System).
+	 *
+	 * @param coins
+	 *            Current coin balance to persist.
+	 */
+	public void saveCoins(final int coins) {
+		saveBalance(COINS_FILE, coins, "coin");
+	}
+
+	/**
+	 * Loads the player's persisted diamond balance (GoG - Currency System).
+	 *
+	 * @return Saved diamond balance, or 0 if there is no save file yet or
+	 *         it cannot be read.
+	 */
+	public int loadDiamonds() {
+		return loadBalance(DIAMONDS_FILE, "diamond");
+	}
+
+	/**
+	 * Saves the player's diamond balance to disk (GoG - Currency System).
+	 *
+	 * @param diamonds
+	 *            Current diamond balance to persist.
+	 */
+	public void saveDiamonds(final int diamonds) {
+		saveBalance(DIAMONDS_FILE, diamonds, "diamond");
+	}
+
+	/**
+	 * Shared implementation of loadCoins() and loadDiamonds(). Never throws:
+	 * a missing or corrupt file just means starting from zero, so the game
+	 * keeps running.
+	 *
+	 * @param fileName
+	 *            Name of the save file, next to the running jar.
+	 * @param label
+	 *            Short currency label, used only for log messages.
+	 * @return Saved balance, never negative.
+	 */
+	private int loadBalance(final String fileName, final String label) {
+		BufferedReader bufferedReader = null;
+		try {
+			File balanceFile = getSaveFile(fileName);
+			if (!balanceFile.exists()) {
+				logger.info("No " + label + " balance saved yet, starting from 0.");
+				return 0;
+			}
+			bufferedReader = new BufferedReader(new InputStreamReader(
+					new FileInputStream(balanceFile), Charset.forName("UTF-8")));
+			String line = bufferedReader.readLine();
+			int balance = line == null ? 0 : Integer.parseInt(line.trim());
+			logger.info("Loading user " + label + " balance.");
+			return Math.max(0, balance);
+		} catch (NumberFormatException e) {
+			logger.warning("The " + label + " balance file is corrupt, starting from 0.");
+			return 0;
+		} catch (IOException e) {
+			logger.warning("Couldn't load " + label + " balance, starting from 0.");
+			return 0;
+		} finally {
+			try {
+				if (bufferedReader != null)
+					bufferedReader.close();
+			} catch (IOException e) {
+				// Nothing else to do if closing fails.
+			}
+		}
+	}
+
+	/**
+	 * Shared implementation of saveCoins() and saveDiamonds(). Writes to a
+	 * temporary file first and then replaces the real one, so a crash in the
+	 * middle of a save can't leave an empty or half-written balance file.
+	 * Never throws: a failed save is logged and the game keeps running.
+	 *
+	 * @param fileName
+	 *            Name of the save file, next to the running jar.
+	 * @param balance
+	 *            Balance to persist.
+	 * @param label
+	 *            Short currency label, used only for log messages.
+	 */
+	private void saveBalance(final String fileName, final int balance,
+			final String label) {
+		BufferedWriter bufferedWriter = null;
+		try {
+			File balanceFile = getSaveFile(fileName);
+			File tempFile = getSaveFile(fileName + ".tmp");
+			bufferedWriter = new BufferedWriter(new OutputStreamWriter(
+					new FileOutputStream(tempFile), Charset.forName("UTF-8")));
+			bufferedWriter.write(Integer.toString(balance));
+			bufferedWriter.newLine();
+			bufferedWriter.close();
+			bufferedWriter = null;
+
+			try {
+				Files.move(tempFile.toPath(), balanceFile.toPath(),
+						StandardCopyOption.REPLACE_EXISTING,
+						StandardCopyOption.ATOMIC_MOVE);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(tempFile.toPath(), balanceFile.toPath(),
+						StandardCopyOption.REPLACE_EXISTING);
+			}
+		} catch (IOException e) {
+			logger.warning("Couldn't save " + label + " balance: "
+					+ e.getMessage());
+		} finally {
+			try {
+				if (bufferedWriter != null)
+					bufferedWriter.close();
+			} catch (IOException e) {
+				// Nothing else to do if closing fails.
+			}
+		}
+	}
+
+	/**
+	 * Returns a save file located next to the running jar, the same place
+	 * the high scores and player profile are kept.
+	 *
+	 * @param fileName
+	 *            Name of the file.
+	 * @return The file.
+	 * @throws IOException
+	 *             In case the application directory cannot be decoded.
+	 */
+	private File getSaveFile(final String fileName) throws IOException {
+		String jarPath = FileManager.class.getProtectionDomain()
+				.getCodeSource().getLocation().getPath();
+		jarPath = URLDecoder.decode(jarPath, "UTF-8");
+		return new File(new File(jarPath).getParent(), fileName);
 	}
 }
