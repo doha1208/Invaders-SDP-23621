@@ -522,12 +522,6 @@ public final class PurchaseManager {
 	}
 
 	/**
-	 * Tells listeners and the Item System an upgrade changed.
-	 *
-	 * @param item
-	 *            Upgrade entry.
-	 */
-	/**
 	 * Item System rule: at most one upgrade is on. Switches every other
 	 * bought upgrade off.
 	 *
@@ -544,6 +538,12 @@ public final class PurchaseManager {
 		return switchedOff;
 	}
 
+	/**
+	 * Tells listeners and the Item System an upgrade changed.
+	 *
+	 * @param item
+	 *            Upgrade entry.
+	 */
 	private void upgradeChanged(final ShopItem item) {
 		syncItemSystem();
 		int level = getActiveUpgradeLevel(item.getRef());
@@ -586,17 +586,22 @@ public final class PurchaseManager {
 
 	/**
 	 * Gear bought before upgrades existed was saved by the Item System.
-	 * Copies it over once, as level 1 and switched on.
+	 * Copies it over once, as level 1. Only the item that was equipped there
+	 * is switched on (Item System rule: one at a time); the rest are off.
 	 *
 	 * @return true if anything was copied.
 	 */
 	private boolean migrateOldGear() {
 		boolean copied = false;
 		try {
+			String equipped = ItemSystem.equippedItem() == null ? null
+					: ItemSystem.equippedItem().itemId;
 			for (ShopItem item : ShopCatalog.getByCategory(
 					ShopCategory.UPGRADE))
 				if (!isOwned(item) && ItemSystem.isOwned(item.getRef())) {
 					this.owned.put(item.getId(), 1);
+					if (!item.getRef().equals(equipped))
+						this.upgradesOff.add(item.getId());
 					copied = true;
 				}
 		} catch (RuntimeException e) {
@@ -680,15 +685,6 @@ public final class PurchaseManager {
 		for (String id : saved.getProperty(OFF_KEY, "").split(","))
 			if (this.owned.containsKey(id.trim()))
 				this.upgradesOff.add(id.trim());
-		// Item System rule: at most one upgrade on (older saves may have
-		// several); the first one in shop order stays on.
-		boolean oneOn = false;
-		for (ShopItem item : ShopCatalog.getByCategory(ShopCategory.UPGRADE))
-			if (isUpgradeOn(item.getRef())) {
-				if (oneOn)
-					this.upgradesOff.add(item.getId());
-				oneOn = true;
-			}
 		try {
 			this.selectedShip = ShipType.valueOf(saved.getProperty(SHIP_KEY,
 					ShipType.STANDARD.name()).trim());
@@ -704,8 +700,18 @@ public final class PurchaseManager {
 		if (!Boolean.parseBoolean(saved.getProperty(MIGRATED_KEY, "false"))) {
 			if (migrateOldGear())
 				this.logger.info("Copied gear from the old save as upgrades.");
-			save();
 		}
+		// Item System rule: at most one upgrade on (older saves may have
+		// several); the first one in shop order stays on.
+		boolean oneOn = false;
+		for (ShopItem item : ShopCatalog.getByCategory(ShopCategory.UPGRADE))
+			if (isUpgradeOn(item.getRef())) {
+				if (oneOn)
+					this.upgradesOff.add(item.getId());
+				oneOn = true;
+			}
+		if (!Boolean.parseBoolean(saved.getProperty(MIGRATED_KEY, "false")))
+			save();
 		this.logger.info("Loaded shop purchases.");
 	}
 
