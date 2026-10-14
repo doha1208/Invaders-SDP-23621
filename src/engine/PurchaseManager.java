@@ -38,8 +38,8 @@ import shop.Skin;
  * <pre>
  * PurchaseManager shop = PurchaseManager.getInstance();
  * // Item team
- * shop.getActiveUpgradeLevel("magnet"); // level while on, 0 when off/not bought
- * shop.getActiveUpgrades();             // every upgrade that is on, with its level
+ * shop.getActiveUpgradeLevel("magnet"); // 1 while on, 0 when off/not bought
+ * shop.getActiveUpgrades();             // the upgrade that is on (at most one), as 1
  * // Skin team
  * shop.getSelectedSkin();               // CLASSIC = default look
  * // Anyone
@@ -49,10 +49,10 @@ import shop.Skin;
  * <ul>
  * <li>Ships and skins: bought once. The chosen ship and skin (one at a
  * time) are the player's loadout, used by GameScreen.</li>
- * <li>Upgrades: bought up to their max level. On as soon as they are
- * bought; the player can switch each one off and on in Customize. Only one
- * can be on at once (Item System rule): switching one on switches the
- * others off.</li>
+ * <li>Upgrades: bought once (no levels, Item System rule). On as soon as
+ * they are bought; the player can switch each one off and on in
+ * Customize. Only one can be on at once (Item System rule): switching one
+ * on switches the others off.</li>
  * <li>Skins and upgrades can be paid with coins or diamonds.</li>
  * </ul>
  *
@@ -72,7 +72,11 @@ public final class PurchaseManager {
 		INSUFFICIENT_FUNDS,
 		/** Ship or skin that is already owned; nothing changed. */
 		ALREADY_OWNED,
-		/** Upgrade already at its max level; nothing changed. */
+		/**
+		 * Upgrade already at its max level; nothing changed. Upgrades have no
+		 * levels any more (Item System rule), so they return ALREADY_OWNED
+		 * instead and this is not used now.
+		 */
 		MAX_LEVEL,
 		/** The entry cannot be paid with that currency; nothing changed. */
 		CURRENCY_NOT_ACCEPTED,
@@ -392,7 +396,8 @@ public final class PurchaseManager {
 	/**
 	 * @param itemId
 	 *            Item System item id, e.g. "magnet".
-	 * @return Level bought, 0 if never bought.
+	 * @return Level bought, 0 if never bought. Upgrades have no levels any
+	 *         more (Item System rule), so this is 1 once bought.
 	 */
 	public int getUpgradeLevel(final String itemId) {
 		return getQuantity(upgrade(itemId));
@@ -413,7 +418,8 @@ public final class PurchaseManager {
 	 *
 	 * @param itemId
 	 *            Item System item id.
-	 * @return Level while switched on; 0 when off or not bought.
+	 * @return Level while switched on; 0 when off or not bought. Upgrades
+	 *         have no levels any more (Item System rule), so 1 means on.
 	 */
 	public int getActiveUpgradeLevel(final String itemId) {
 		return isUpgradeOn(itemId) ? getUpgradeLevel(itemId) : 0;
@@ -421,7 +427,8 @@ public final class PurchaseManager {
 
 	/**
 	 * @return Every upgrade that is on, as Item System item id to level, in
-	 *         shop order.
+	 *         shop order. Only one can be on and upgrades have no levels any
+	 *         more (Item System rule), so this holds at most one entry, at 1.
 	 */
 	public Map<String, Integer> getActiveUpgrades() {
 		Map<String, Integer> active = new LinkedHashMap<String, Integer>();
@@ -663,6 +670,7 @@ public final class PurchaseManager {
 				int quantity = Integer.parseInt(saved.getProperty(key).trim());
 				ShopItem item = ShopCatalog.findById(id);
 				// Entries no longer sold (e.g. old power-up items) are dropped.
+				// Old upgrade levels (up to 3) load as 1: no levels any more.
 				if (quantity > 0 && item != null)
 					this.owned.put(id, Math.min(quantity, item.getMaxLevel()));
 			} catch (NumberFormatException e) {

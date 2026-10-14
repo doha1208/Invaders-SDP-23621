@@ -10,7 +10,7 @@ import java.util.Random;
  * The Night Market: a few shop entries sold at a discount, changing once a
  * day. The picks come from a random generator seeded with the date, so the
  * deals stay the same all day and nothing needs saving. The discount
- * applies to both coin and diamond prices, and to every upgrade level.
+ * applies to both coin and diamond prices.
  *
  * @author GoG - Currency System
  */
