@@ -63,6 +63,31 @@ public class Ship extends Entity {
             this.shootingInterval = shootingInterval;
             this.idleSprite = idleSprite;
         }
+
+        /**
+         * Read-only stats, so the Shop and Customize screens can show them
+         * without keeping their own copy (GoG - Currency System).
+         *
+         * @return Movement of the ship for each unit of time.
+         */
+        public int getSpeed() {
+            return this.speed;
+        }
+
+        /** @return Time between shots, in milliseconds. */
+        public int getShootingInterval() {
+            return this.shootingInterval;
+        }
+
+        /** @return Bullets fired per shot. */
+        public int getBulletsPerShot() {
+            return this == TWO_WAY ? 2 : 1;
+        }
+
+        /** @return Sprite of the ship while it is not destroyed. */
+        public SpriteType getIdleSprite() {
+            return this.idleSprite;
+        }
     }
 	
 	/** Type of this ship. */
@@ -76,6 +101,9 @@ public class Ship extends Entity {
 	private static final int BLINK_INTERVAL = 200;
 	private static final Color BASE_COLOR = Color.GREEN;
 	private static final Color BLINK_COLOR = new Color(255, 60, 60);
+
+	/** Colour of the ship when not blinking; changed by skins (GoG). */
+	private Color skinColor = BASE_COLOR;
 
 	/** Minimum time between shots. */
 	private Cooldown shootingCooldown;
@@ -219,6 +247,19 @@ public class Ship extends Entity {
 	}
 
 	/**
+	 * Paints the ship in a skin colour (GoG - Currency System). The
+	 * low-health blink still flashes red and returns to this colour.
+	 *
+	 * @param color
+	 *            Skin colour; null goes back to the standard green.
+	 */
+	public final void setSkinColor(final Color color) {
+		this.skinColor = color == null ? BASE_COLOR : color;
+		if (!this.blinkOn)
+			setColor(this.skinColor);
+	}
+
+	/**
 	 * Updates status of the ship.
 	 */
 	public final void update() {
@@ -234,7 +275,7 @@ public class Ship extends Entity {
 		 */
 		if (this.blinking && this.blinkCooldown.checkFinished()) {
 			this.blinkOn = !this.blinkOn;
-			setColor(this.blinkOn ? BLINK_COLOR : BASE_COLOR);
+			setColor(this.blinkOn ? BLINK_COLOR : this.skinColor);
 			this.blinkCooldown.reset();
 		}
 	}
@@ -252,7 +293,7 @@ public class Ship extends Entity {
 			return;
 		this.blinking = blinking;
 		this.blinkOn = false;
-		setColor(BASE_COLOR);
+		setColor(this.skinColor);
 		this.blinkCooldown.reset();
 	}
 
