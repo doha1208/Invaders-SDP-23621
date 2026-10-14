@@ -86,17 +86,18 @@ public final class ShopCatalog {
 			if (skin != Skin.CLASSIC)
 				items.add(skin(skin));
 
-		// Upgrades (Item team): up to level 3, either currency.
+		// Upgrades (Item team): either currency. Item System rule: equipped
+		// items have no levels, so each one is bought once (max level 1).
 		// upgrade(id, name, description, coins Lv1, +coins per level,
 		// diamonds Lv1, +diamonds per level, max level)
 		items.add(upgrade("extra_slots", "Extra Slots", "More item slots"
-				+ " in every run.", 60, 30, 30, 15, 3));
+				+ " in every run.", 60, 30, 30, 15, 1));
 		items.add(upgrade("magnet", "Magnet", "Picks up items as soon as"
-				+ " they land.", 50, 25, 25, 12, 3));
+				+ " they land.", 50, 25, 25, 12, 1));
 		items.add(upgrade("max_life", "Max Life", "Life items can take you"
-				+ " higher than the normal cap.", 80, 40, 40, 20, 3));
+				+ " higher than the normal cap.", 80, 40, 40, 20, 1));
 		items.add(upgrade("long_lasting", "Long Lasting", "Shield, freeze"
-				+ " and boosts last longer.", 50, 25, 25, 12, 3));
+				+ " and boosts last longer.", 50, 25, 25, 12, 1));
 
 		ITEMS = Collections.unmodifiableList(items);
 	}

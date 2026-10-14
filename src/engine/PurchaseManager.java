@@ -50,8 +50,9 @@ import shop.Skin;
  * <li>Ships and skins: bought once. The chosen ship and skin (one at a
  * time) are the player's loadout, used by GameScreen.</li>
  * <li>Upgrades: bought up to their max level. On as soon as they are
- * bought; the player can switch each one off and on in Customize. Any
- * number can be on at once.</li>
+ * bought; the player can switch each one off and on in Customize. Only one
+ * can be on at once (Item System rule): switching one on switches the
+ * others off.</li>
  * <li>Skins and upgrades can be paid with coins or diamonds.</li>
  * </ul>
  *
@@ -185,15 +186,18 @@ public final class PurchaseManager {
 			return PurchaseResult.INSUFFICIENT_FUNDS;
 
 		int before = getQuantity(item);
-		boolean wasOff = this.upgradesOff.remove(item.getId());
+		Set<String> offBefore = new LinkedHashSet<String>(this.upgradesOff);
+		this.upgradesOff.remove(item.getId());
 		this.owned.put(item.getId(), before + 1);
+		List<ShopItem> switchedOff = item.getCategory() == ShopCategory.UPGRADE
+				? switchOtherUpgradesOff(item) : Collections.<ShopItem>emptyList();
 		if (!save()) {
 			if (before == 0)
 				this.owned.remove(item.getId());
 			else
 				this.owned.put(item.getId(), before);
-			if (wasOff)
-				this.upgradesOff.add(item.getId());
+			this.upgradesOff.clear();
+			this.upgradesOff.addAll(offBefore);
 			refund(currency, price);
 			this.logger.warning("Purchase of " + item.getId()
 					+ " could not be saved, refunded.");
@@ -208,6 +212,8 @@ public final class PurchaseManager {
 		if (item.getCategory() == ShopCategory.UPGRADE) {
 			this.lastSwitchedOn = item.getId();
 			upgradeChanged(item);
+			for (ShopItem other : switchedOff)
+				upgradeChanged(other);
 		}
 		return PurchaseResult.SUCCESS;
 	}
@@ -440,21 +446,25 @@ public final class PurchaseManager {
 			return false;
 		if (isUpgradeOn(itemId) == on)
 			return true;
-		if (on)
+		Set<String> offBefore = new LinkedHashSet<String>(this.upgradesOff);
+		List<ShopItem> switchedOff = Collections.<ShopItem>emptyList();
+		if (on) {
 			this.upgradesOff.remove(item.getId());
-		else
+			switchedOff = switchOtherUpgradesOff(item);
+		} else {
 			this.upgradesOff.add(item.getId());
+		}
 		if (!save()) {
-			if (on)
-				this.upgradesOff.add(item.getId());
-			else
-				this.upgradesOff.remove(item.getId());
+			this.upgradesOff.clear();
+			this.upgradesOff.addAll(offBefore);
 			return false;
 		}
 		if (on)
 			this.lastSwitchedOn = item.getId();
 		this.logger.info("Upgrade " + itemId + (on ? " on." : " off."));
 		upgradeChanged(item);
+		for (ShopItem other : switchedOff)
+			upgradeChanged(other);
 		return true;
 	}
 
@@ -510,6 +520,23 @@ public final class PurchaseManager {
 	 * @param item
 	 *            Upgrade entry.
 	 */
+	/**
+	 * Item System rule: at most one upgrade is on. Switches every other
+	 * bought upgrade off.
+	 *
+	 * @param keepOn
+	 *            Upgrade that stays on.
+	 * @return Upgrades that were on and are now off.
+	 */
+	private List<ShopItem> switchOtherUpgradesOff(final ShopItem keepOn) {
+		List<ShopItem> switchedOff = new ArrayList<ShopItem>();
+		for (ShopItem other : ShopCatalog.getByCategory(ShopCategory.UPGRADE))
+			if (!other.getId().equals(keepOn.getId()) && isOwned(other)
+					&& this.upgradesOff.add(other.getId()))
+				switchedOff.add(other);
+		return switchedOff;
+	}
+
 	private void upgradeChanged(final ShopItem item) {
 		syncItemSystem();
 		int level = getActiveUpgradeLevel(item.getRef());
@@ -645,6 +672,15 @@ public final class PurchaseManager {
 		for (String id : saved.getProperty(OFF_KEY, "").split(","))
 			if (this.owned.containsKey(id.trim()))
 				this.upgradesOff.add(id.trim());
+		// Item System rule: at most one upgrade on (older saves may have
+		// several); the first one in shop order stays on.
+		boolean oneOn = false;
+		for (ShopItem item : ShopCatalog.getByCategory(ShopCategory.UPGRADE))
+			if (isUpgradeOn(item.getRef())) {
+				if (oneOn)
+					this.upgradesOff.add(item.getId());
+				oneOn = true;
+			}
 		try {
 			this.selectedShip = ShipType.valueOf(saved.getProperty(SHIP_KEY,
 					ShipType.STANDARD.name()).trim());
