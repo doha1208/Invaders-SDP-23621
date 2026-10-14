@@ -273,7 +273,7 @@ public class ShipSelectScreen extends Screen {
 			PurchaseManager loadout = PurchaseManager.getInstance();
 			if (!loadout.isOwned(upgrade))
 				return upgrade.getName();
-			return upgrade.getName() + " Lv" + loadout.getQuantity(upgrade)
+			return upgrade.getName()
 					+ (loadout.isUpgradeOn(upgrade.getRef()) ? " ON" : " OFF");
 		}
 	}
