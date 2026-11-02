@@ -18,8 +18,11 @@ import java.util.logging.Logger;
 import screen.MenuItem;
 import screen.Screen;
 import screen.Starfield;
+import entity.Boss;
 import entity.Coin;
+import entity.DiamondDrop;
 import entity.Entity;
+import entity.Meteor;
 import entity.Particle;
 import entity.Ship;
 import item.ItemAPI;
@@ -107,12 +110,13 @@ public final class DrawManager {
 		ShipFastMove,
 		/** Player ship that shoots from two barrels (Two-Way Shot). */
 		ShipTwoWay,
-		/** First Flight achievement icon. */
-		FirstFlight,
 		/** Fast Attack player ship. */
 		ShipFastAttack,
 		/** Big Bullet player ship. */
 		ShipBigBullet,
+
+		/** First Flight achievement icon. */
+		FirstFlight,
 		/** Fleet Master achievement icon. */
 		FleetMaster,
 		/** Weakestship sprite. */
@@ -120,7 +124,47 @@ public final class DrawManager {
 		/** Infinity Void achievement icon. */
 		InfinityVoid,
 		/** First Boss Kill achievement icon. */
-		BossKill
+		BossKill,
+		/** Fast Attack skin A1 (Arrow). */
+		ShipSkinA1,
+		/** Fast Attack skin A2 (Twin Fang). */
+		ShipSkinA2,
+		/** Fast Attack skin A3 (Stealth). */
+		ShipSkinA3,
+		/** Big Bullet skin B1 (Cannon). */
+		ShipSkinB1,
+		/** Big Bullet skin B2 (Mortar). */
+		ShipSkinB2,
+		/** Big Bullet skin B3 (Fortress). */
+		ShipSkinB3,
+		/** Fast Move skin C1 (Jet). */
+		ShipSkinC1,
+		/** Fast Move skin C2 (Triple Thruster). */
+		ShipSkinC2,
+		/** Fast Move skin C3 (Stealth). */
+		ShipSkinC3,
+		/** Two-Way Shot skin D1 (Long Barrels). */
+		ShipSkinD1,
+		/** Two-Way Shot skin D2 (Twin Spike). */
+		ShipSkinD2,
+		/** Two-Way Shot skin D3 (Hollow). */
+		ShipSkinD3,
+
+		/** Achievement trophy icon. */
+		Trophy,
+		/** Enemies killed achievement icon. */
+		Hunter,
+		/** Accuracy target achievement icon. */
+		Accuracytarget,
+        /** Currency collected in one run achievement icon**/
+        Looter,
+        /** Item used achievement icon. */
+		ItemCol,
+		/** Bouncing boss animation frames. */
+		MidBoss1,
+		MidBoss2,
+		FinalBoss1,
+		FinalBoss2
 	};
 
 	/**
@@ -163,6 +207,29 @@ public final class DrawManager {
 			spriteMap.put(SpriteType.Weakestship, new boolean[11][11]);
 			spriteMap.put(SpriteType.InfinityVoid, new boolean[11][11]);
 			spriteMap.put(SpriteType.BossKill, new boolean[11][11]);
+			spriteMap.put(SpriteType.Hunter, new boolean[13][12]);
+			spriteMap.put(SpriteType.Trophy, new boolean[11][8]);
+			spriteMap.put(SpriteType.Accuracytarget, new boolean[11][11]);
+            spriteMap.put(SpriteType.Looter, new boolean[11][11]);
+			spriteMap.put(SpriteType.ItemCol, new boolean[12][12]);
+			spriteMap.put(SpriteType.MidBoss1, new boolean[16][10]);
+			spriteMap.put(SpriteType.MidBoss2, new boolean[16][10]);
+			spriteMap.put(SpriteType.FinalBoss1, new boolean[24][16]);
+			spriteMap.put(SpriteType.FinalBoss2, new boolean[24][16]);
+
+			// Player ship skins (A1)
+			spriteMap.put(SpriteType.ShipSkinA1, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinA2, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinA3, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinB1, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinB2, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinB3, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinC1, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinC2, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinC3, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinD1, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinD2, new boolean[13][8]);
+			spriteMap.put(SpriteType.ShipSkinD3, new boolean[13][8]);
 
 			fileManager.loadSprite(spriteMap);
 			logger.info("Finished loading the sprites.");
@@ -300,8 +367,32 @@ public final class DrawManager {
 		g2d.setComposite(AlphaComposite.getInstance(
 				AlphaComposite.SRC_OVER, alpha));
 
-		drawSprite(entity.getSpriteType(), positionX, positionY,
-				entity.getColor());
+		// If the entity is a Bullet fired by the PLAYER (speed < 0), stretch its sprite to match its actual dimensions.
+		if (entity instanceof entity.Bullet && ((entity.Bullet) entity).getSpeed() < 0) {
+			boolean[][] image = spriteMap.get(entity.getSpriteType());
+			if (image != null && image.length > 0) {
+				// Calculate how much to stretch each pixel of the sprite
+				double scaleX = (double) entity.getWidth() / image.length;
+				double scaleY = (double) entity.getHeight() / image[0].length;
+
+				backBufferGraphics.setColor(entity.getColor());
+				for (int i = 0; i < image.length; i++) {
+					for (int j = 0; j < image[i].length; j++) {
+						if (image[i][j]) {
+							backBufferGraphics.fillRect(
+									positionX + (int)(i * scaleX),
+									positionY + (int)(j * scaleY),
+									(int)Math.ceil(scaleX),
+									(int)Math.ceil(scaleY));
+						}
+					}
+				}
+			}
+		} else {
+			// For all other entities (ships, enemies, and ENEMY bullets), use the standard 2x pixel drawing
+			drawSprite(entity.getSpriteType(), positionX, positionY,
+					entity.getColor());
+		}
 
 		g2d.setComposite(AlphaComposite.SrcOver); // back to normal
 	}
@@ -375,6 +466,16 @@ public final class DrawManager {
 		backBufferGraphics.setColor(coin.getColor());
 		backBufferGraphics.fillOval(positionX, positionY, coin.getWidth(),
 				coin.getHeight());
+	}
+
+	/** Draws the bonus meteor. AUTHORED BY: VFX TEAM (Effection) */
+	public void drawMeteor(final Meteor meteor) {
+		MeteorManager.drawMeteor(backBufferGraphics, meteor);
+	}
+
+	/** Draws a meteor diamond. AUTHORED BY: VFX TEAM (Effection) */
+	public void drawDiamondDrop(final DiamondDrop drop) {
+		MeteorManager.drawDiamond(backBufferGraphics, drop, fontRegular);
 	}
 
 	/**
@@ -618,6 +719,36 @@ public final class DrawManager {
 				+ iconTextGap, positionY);
 	}
 
+/** Width of the boss health bar, as a fraction of the screen width. */
+	private static final double BOSS_BAR_WIDTH_RATIO = 0.5;
+	/** Height, in pixels, of the boss health bar. */
+	private static final int BOSS_BAR_HEIGHT = 8;
+	/** Gap between the "BOSS" label baseline and the top of the bar. */
+	private static final int BOSS_BAR_GAP = 4;
+	
+	/** Draws the current boss's remaining health as a labelled bar below the item HUD, so the player can track a Stage 5 (MidBoss) or Stage 10 (FinalBoss) encounter at a glance (Requirement 8 - Gameplay HUD). Boss may be null when the stage has no boss or it has already been defeated. */
+	public void drawBossHealthBar(final Screen screen, final Boss boss, final int positionY) {
+		if (boss == null || boss.isDestroyed())
+			return;
+		
+		int maxHp = Math.max(1, boss.getMaxHp());
+		int hp = Math.max(0, Math.min(boss.getHp(), maxHp));
+		
+		int barWidth = (int) (screen.getWidth() * BOSS_BAR_WIDTH_RATIO);
+		int barX = (screen.getWidth() - barWidth) / 2;
+		int barY = positionY + BOSS_BAR_GAP;
+		int filledWidth = barWidth * hp / maxHp;
+		
+		backBufferGraphics.setFont(fontRegular);
+		backBufferGraphics.setColor(Color.WHITE);
+		drawCenteredRegularString(screen, "BOSS", positionY);
+		
+		backBufferGraphics.setColor(Color.RED);
+		backBufferGraphics.drawRect(barX, barY, barWidth, BOSS_BAR_HEIGHT);
+		if (filledWidth > 0)
+			backBufferGraphics.fillRect(barX, barY, filledWidth, BOSS_BAR_HEIGHT);
+	}
+	
 	/**
 	 * Draws a sparkle, see-through according to its age.
 	 * AUTHORED BY: VFX TEAM (Effection)
@@ -634,7 +765,7 @@ public final class DrawManager {
 				particle.getSize());
 		g2d.setComposite(java.awt.AlphaComposite.SrcOver);
 	}
-		/**
+	/**
 	 * Draws all sparkles, clipped to the play area below the HUD line.
 	 * Call while the world offset is applied so they shake with the world.
 	 * AUTHORED BY: VFX TEAM (Effection)
@@ -647,7 +778,7 @@ public final class DrawManager {
 	 *            Y of the HUD separation line; nothing is drawn above it.
 	 */
 	public void drawParticles(final Screen screen,
-			final java.util.List<Particle> particles, final int topY) {
+							  final java.util.List<Particle> particles, final int topY) {
 		java.awt.Shape oldClip = backBufferGraphics.getClip();
 		// Undo the shake offset so the clip stays fixed on screen.
 		backBufferGraphics.clipRect(-worldOffsetX, topY - worldOffsetY,
@@ -743,6 +874,10 @@ public final class DrawManager {
 		backBufferGraphics.drawString("LIVES", 20, 25);
 
 		Ship dummyShip = new Ship(0, 0, Core.getSelectedShipType());
+		// Life icons use the ship look chosen in Customize (A1).
+		shop.ShapeSkin shape = PurchaseManager.getInstance()
+				.getSelectedShape(dummyShip.getType());
+		dummyShip.setShapeSprite(shape == null ? null : shape.getSprite());
 		for (int i = 0; i < lives; i++)
 			drawEntity(dummyShip, 20 + LIVES_LABEL_WIDTH
 					+ LIVES_ICON_SPACING * i, 10);
@@ -886,7 +1021,8 @@ public final class DrawManager {
 	}
 
 	/**
-	 * Draws main menu.
+	 * Draws the main menu, one row per item, through drawMenuRow so the
+	 * main menu and every other screen share one selected-row style.
 	 *
 	 * @param screen
 	 *            Screen to draw on.
@@ -894,23 +1030,10 @@ public final class DrawManager {
 	 *            Item the cursor is on.
 	 */
 	public void drawMenu(final Screen screen, final MenuItem selected) {
-		for (MenuItem item : MenuItem.values()) {
-			int baseline = menuItemBaseline(screen, item.ordinal());
-
-			if (item == selected) {
-				String text = "> " + item.getTitle() + " <";
-				backBufferGraphics.setColor(Color.GREEN);
-				backBufferGraphics.setFont(fontSelected);
-				backBufferGraphics.drawString(text, screen.getWidth() / 2
-						- fontSelectedMetrics.stringWidth(text) / 2, baseline);
-			} else {
-				if (!item.isEnabled())
-					backBufferGraphics.setColor(Color.DARK_GRAY);
-				else
-					backBufferGraphics.setColor(Color.WHITE);
-				drawCenteredRegularString(screen, item.getTitle(), baseline);
-			}
-		}
+		for (MenuItem item : MenuItem.values())
+			drawMenuRow(screen, item.getTitle(),
+					menuItemBaseline(screen, item.ordinal()),
+					item == selected, item.isEnabled());
 	}
 
 	/**
@@ -930,13 +1053,36 @@ public final class DrawManager {
 			return null;
 		int spacing = menuItemSpacing();
 		for (MenuItem item : MenuItem.values()) {
-			int top = menuItemBaseline(screen, item.ordinal())
-					- fontRegularMetrics.getAscent()
-					- (spacing - fontRegularMetrics.getHeight()) / 2;
-			if (positionY >= top && positionY < top + spacing)
+			if (isOnMenuRow(menuItemBaseline(screen, item.ordinal()),
+					spacing, positionY))
 				return item;
 		}
 		return null;
+	}
+
+	/**
+	 * Checks whether a height falls on a row of regular text. The row is
+	 * centred on the text and as tall as the gap to the next row, so rows
+	 * touch and the whole width is hoverable, not just the glyphs. Screens
+	 * pass the same baseline they draw at, so drawing and hit-testing
+	 * cannot drift apart.
+	 *
+	 * @param baseline
+	 *            Baseline the row's text is drawn at.
+	 * @param rowHeight
+	 *            Distance between this row and the next one.
+	 * @param positionY
+	 *            Height to check, in screen coordinates.
+	 * @return True if the height is on the row, false otherwise or if
+	 *         nothing has been drawn yet.
+	 */
+	public boolean isOnMenuRow(final int baseline, final int rowHeight,
+							   final int positionY) {
+		if (fontRegularMetrics == null)
+			return false;
+		int top = baseline - fontRegularMetrics.getAscent()
+				- (rowHeight - fontRegularMetrics.getHeight()) / 2;
+		return positionY >= top && positionY < top + rowHeight;
 	}
 
 	/**
@@ -1553,8 +1699,8 @@ public final class DrawManager {
 	}
 
 	/**
-	 * Draws a centered row of text in the menu colours: green when
-	 * selected, white otherwise.
+	 * Draws a centered row of text in the menu style, as enabled. See the
+	 * five-argument version.
 	 *
 	 * @param screen
 	 *            Screen to draw on.
@@ -1566,13 +1712,15 @@ public final class DrawManager {
 	 *            Whether the row is currently selected.
 	 */
 	public void drawMenuRow(final Screen screen, final String string,
-							final int height, final boolean selected) {
+			final int height, final boolean selected) {
 		drawMenuRow(screen, string, height, selected, true);
 	}
 
 	/**
-	 * Draws a centered row of text in the menu colours: green when
-	 * selected, dark grey when disabled, white otherwise.
+	 * Draws a centered row of text in the menu style shared by every screen,
+	 * the main menu included: the selected row is green, in the larger font
+	 * and between "> <" markers; a disabled row is dark grey; any other row
+	 * is white.
 	 *
 	 * @param screen
 	 *            Screen to draw on.
@@ -1586,17 +1734,22 @@ public final class DrawManager {
 	 *            Whether the row can be chosen.
 	 */
 	public void drawMenuRow(final Screen screen, final String string,
-							final int height, final boolean selected,
-							final boolean enabled) {
-		if (selected)
+			final int height, final boolean selected,
+			final boolean enabled) {
+		if (selected) {
+			String text = "> " + string + " <";
 			backBufferGraphics.setColor(Color.GREEN);
-		else if (!enabled)
-			backBufferGraphics.setColor(Color.DARK_GRAY);
-		else
-			backBufferGraphics.setColor(Color.WHITE);
-		drawCenteredRegularString(screen, string, height);
+			backBufferGraphics.setFont(fontSelected);
+			backBufferGraphics.drawString(text,
+					(screen.getWidth()
+							- fontSelectedMetrics.stringWidth(text)) / 2,
+					height);
+		} else {
+			backBufferGraphics.setColor(
+					enabled ? Color.WHITE : Color.DARK_GRAY);
+			drawCenteredRegularString(screen, string, height);
+		}
 	}
-
 	/**
 	 * Draws the damage dim overlay when the player is hit.
 	 *AUTHORED BY: VFX TEAM (Effection)
@@ -1614,6 +1767,31 @@ public final class DrawManager {
 	}
 
 	/**
+	 * Draws the comet trail behind a player bullet.
+	 * AUTHORED BY: VFX TEAM (Effection)
+	 *
+	 * @param bullet Player bullet.
+	 */
+	public void drawBulletTrail(final Entity bullet) {
+		if (bullet != null)
+			BulletTrail.draw(backBufferGraphics, bullet.getPositionX(),
+					bullet.getPositionY(), bullet.getWidth(),
+					bullet.getHeight());
+	}
+
+	/**
+	 * Draws the Lightning Chain kill effect.
+	 * AUTHORED BY: VFX TEAM (Effection)
+	 *
+	 * @param effect
+	 *            Effect to draw.
+	 */
+	public void drawLightningChain(final LightningChain effect) {
+		if (effect != null)
+			effect.draw(backBufferGraphics);
+	}
+
+	/**
 	 * Draws the low-health glitch effect.
 	 * AUTHORED BY: VFX TEAM (Effection)
 	 *Any further inquiries please contact us.
@@ -1626,7 +1804,7 @@ public final class DrawManager {
 			effect.draw(backBuffer, backBufferGraphics);
 	}
 
-	
+
 	/**
 	 * Draws the points shown when enemies are destroyed.
 	 * AUTHORED BY: VFX TEAM (Effection)
@@ -1636,9 +1814,41 @@ public final class DrawManager {
 	 * @param effect Points effect to draw.
 	 */
 	public void drawPointsEffect(final Screen screen,
-			final PointsEffect effect) {
+								 final PointsEffect effect) {
 		if (effect != null)
 			effect.draw(backBufferGraphics, screen.getWidth(), fontRegular);
+	}
+
+	/**
+	 * Draws the Warp In effect while the ship beams in.
+	 * AUTHORED BY: VFX TEAM (Effection)
+	 *
+	 * @param warpIn Warp In effect, may be null.
+	 * @param ship   Player ship.
+	 * @param color  Ship colour this frame.
+	 * @param topY   Top of the play area.
+	 */
+	public void drawWarpIn(final WarpIn warpIn, final Ship ship,
+			final Color color, final int topY) {
+		if (warpIn != null)
+			warpIn.draw((Graphics2D) backBufferGraphics,
+					spriteMap.get(ship.getIdleSprite()), ship,
+					color, topY);
+	}
+
+	/**
+	 * Draws the looping Warp In preview for the shop.
+	 * AUTHORED BY: VFX TEAM (Effection)
+	 *
+	 * @param shipSprite Sprite of the selected ship.
+	 * @param color      Colour of the selected skin.
+	 * @param centerX    Centre of the preview.
+	 * @param top        Top of the preview.
+	 */
+	public void drawWarpInPreview(final SpriteType shipSprite,
+			final Color color, final int centerX, final int top) {
+		WarpIn.drawPreview((Graphics2D) backBufferGraphics,
+				spriteMap.get(shipSprite), color, centerX, top, 50);
 	}
 
 	/** Point size of the small text used in the shop and Customize panels. */
@@ -1666,7 +1876,7 @@ public final class DrawManager {
 	 * @param color     Fill colour.
 	 */
 	public void fillBox(final int positionX, final int positionY,
-			final int width, final int height, final Color color) {
+						final int width, final int height, final Color color) {
 		backBufferGraphics.setColor(color);
 		backBufferGraphics.fillRect(positionX, positionY, width, height);
 	}
@@ -1692,7 +1902,7 @@ public final class DrawManager {
 	 * @param color     Colour of the text.
 	 */
 	public void drawSmallString(final String string, final int positionX,
-			final int positionY, final Color color) {
+								final int positionY, final Color color) {
 		backBufferGraphics.setFont(smallFont());
 		backBufferGraphics.setColor(color);
 		backBufferGraphics.drawString(string, positionX, positionY);
@@ -1730,7 +1940,7 @@ public final class DrawManager {
 	 * @param size      Icon size in pixels.
 	 */
 	public void drawCurrencyIcon(final int positionX, final int baseline,
-			final boolean diamond, final int size) {
+								 final boolean diamond, final int size) {
 		int top = baseline - size + 1;
 		if (diamond) {
 			int[] xPoints = { positionX + size / 2, positionX + size,
@@ -1755,8 +1965,8 @@ public final class DrawManager {
 	 * @param color      Colour of the filled pixels.
 	 */
 	public void drawSpriteScaled(final SpriteType spriteType,
-			final int positionX, final int positionY, final int pixelSize,
-			final Color color) {
+								 final int positionX, final int positionY, final int pixelSize,
+								 final Color color) {
 		boolean[][] image = spriteMap.get(spriteType);
 		if (image == null)
 			return;
